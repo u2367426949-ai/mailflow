@@ -1,0 +1,175 @@
+// ============================================================
+// MailFlow — Schéma Prisma
+// PostgreSQL + Prisma ORM
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------
+// Enum : Plans d'abonnement
+// ----------------------------------------------------------
+enum Plan {
+  free
+  starter
+  pro
+  business
+}
+
+// ----------------------------------------------------------
+// Table : users
+// ----------------------------------------------------------
+model User {
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  name                 String?
+  avatar               String?
+  googleId             String    @unique @map("google_id")
+  googleAccessToken    String?   @map("google_access_token") @db.Text
+  googleRefreshToken   String?   @map("google_refresh_token") @db.Text
+  googleTokenExpiry    DateTime? @map("google_token_expiry")
+  stripeCustomerId     String?   @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
+  plan                 Plan      @default(free)
+  trialEndsAt          DateTime? @map("trial_ends_at")
+  digestEnabled        Boolean   @default(true) @map("digest_enabled")
+  digestTime           String    @default("08:00") @map("digest_time") // HH:MM UTC
+  timezone             String    @default("Europe/Paris")
+  lastSyncAt           DateTime? @map("last_sync_at")
+  isOnboarded          Boolean   @default(false) @map("is_onboarded")
+  settings             Json      @default("{}") @db.JsonB
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  emails        Email[]
+  categories    Category[]
+  feedbacks     EmailFeedback[]
+  digests       Digest[]
+  stripeEvents  StripeEvent[]
+
+  @@map("users")
+}
+
+// ----------------------------------------------------------
+// Table : emails
+// ----------------------------------------------------------
+model Email {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  gmailId       String    @unique @map("gmail_message_id")
+  threadId      String    @map("thread_id")
+  from          String
+  to            String[]
+  cc            String[]  @default([])
+  subject       String    @db.Text
+  snippet       String    @db.Text
+  receivedAt    DateTime  @map("received_at")
+  category      String    @default("unknown")
+  confidence    Float     @default(0)
+  labels        String[]  @default([])
+  isProcessed   Boolean   @default(false) @map("is_processed")
+  isLabeled     Boolean   @default(false) @map("is_labeled")
+  isRead        Boolean   @default(false) @map("is_read")
+  aiReason      String?   @map("ai_reason") @db.Text
+  metadata      Json      @default("{}") @db.JsonB
+  createdAt     DateTime  @default(now()) @map("created_at")
+  processedAt   DateTime? @map("processed_at")
+
+  // Relations
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedbacks EmailFeedback[]
+
+  @@index([userId, receivedAt(sort: Desc)])
+  @@index([userId, isProcessed])
+  @@index([userId, category])
+  @@map("emails")
+}
+
+// ----------------------------------------------------------
+// Table : categories
+// ----------------------------------------------------------
+model Category {
+  id           String   @id @default(uuid())
+  userId       String?  @map("user_id")
+  name         String   // slug: urgent, personal, business, invoices, newsletters, spam
+  displayName  String   @map("display_name")
+  description  String   @db.Text
+  emoji        String   @default("📧")
+  color        String   @default("#3b82f6")
+  gmailLabelId String?  @map("gmail_label_id")
+  isDefault    Boolean  @default(false) @map("is_default")
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId, isActive])
+  @@map("categories")
+}
+
+// ----------------------------------------------------------
+// Table : email_feedback
+// ----------------------------------------------------------
+model EmailFeedback {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  emailId           String   @map("email_id")
+  originalCategory  String   @map("original_category")
+  correctedCategory String   @map("corrected_category")
+  comment           String?  @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email Email @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("email_feedback")
+}
+
+// ----------------------------------------------------------
+// Table : digests
+// ----------------------------------------------------------
+model Digest {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  date       DateTime @db.Date
+  stats      Json     @db.JsonB // { total, byCategory: Record<string, number>, accuracy, corrections }
+  topEmails  Json     @default("[]") @db.JsonB // Email[] (metadata only)
+  sentAt     DateTime? @map("sent_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("digests")
+}
+
+// ----------------------------------------------------------
+// Table : stripe_events
+// ----------------------------------------------------------
+model StripeEvent {
+  id            String   @id @default(uuid())
+  stripeEventId String   @unique @map("stripe_event_id")
+  userId        String?  @map("user_id")
+  type          String
+  data          Json     @db.JsonB
+  processed     Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("stripe_events")
+}
