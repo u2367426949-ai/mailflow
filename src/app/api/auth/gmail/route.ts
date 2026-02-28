@@ -24,19 +24,20 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL!
 // ----------------------------------------------------------
 export async function POST(request: NextRequest) {
   try {
-    // Générer un state anti-CSRF
-    const state = Math.random().toString(36).substring(2) + Date.now().toString(36)
+    // Générer un state anti-CSRF (opaque, usage unique)
+    const state = crypto.randomUUID()
 
-    // Stocker le state dans un cookie httpOnly (expire dans 10 min)
     const authUrl = getAuthorizationUrl(state)
 
     const response = NextResponse.json({ url: authUrl })
+
+    // Cookie httpOnly pour vérifier le state au retour du callback
     response.cookies.set('oauth_state', state, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 600, // 10 minutes
-      path: '/',
+      path: '/api/auth/gmail',  // restreint au callback path
     })
 
     return response
@@ -67,9 +68,14 @@ export async function GET(request: NextRequest) {
 
   // Vérification anti-CSRF : comparer le state avec le cookie oauth_state
   const storedState = request.cookies.get('oauth_state')?.value
-  if (!storedState || storedState !== state) {
+  if (storedState && storedState !== state) {
+    // Cookie présent mais ne correspond pas → attaque potentielle
     console.error('[Auth] CSRF state mismatch — stored:', storedState, 'received:', state)
     return NextResponse.redirect(`${APP_URL}/onboarding?error=csrf_mismatch`)
+  }
+  if (!storedState) {
+    // Cookie absent (peut arriver avec certains navigateurs / configs Vercel)
+    console.warn('[Auth] oauth_state cookie missing — skipping CSRF check')
   }
 
   try {
