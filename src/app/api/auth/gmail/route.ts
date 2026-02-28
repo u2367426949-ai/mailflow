@@ -67,14 +67,27 @@ export async function GET(request: NextRequest) {
 
   try {
     // Échanger le code contre les tokens
-    const tokens = await exchangeCodeForTokens(code)
+    let tokens
+    try {
+      tokens = await exchangeCodeForTokens(code)
+    } catch (tokenErr) {
+      console.error('[Auth] Token exchange failed:', tokenErr)
+      return NextResponse.redirect(`${APP_URL}/onboarding?error=token_exchange_failed`)
+    }
 
     if (!tokens.access_token) {
-      throw new Error('No access token received')
+      console.error('[Auth] No access token received', tokens)
+      return NextResponse.redirect(`${APP_URL}/onboarding?error=no_access_token`)
     }
 
     // Récupérer le profil Google
-    const profile = await getGoogleProfile(tokens.access_token)
+    let profile
+    try {
+      profile = await getGoogleProfile(tokens.access_token)
+    } catch (profileErr) {
+      console.error('[Auth] Profile fetch failed:', profileErr)
+      return NextResponse.redirect(`${APP_URL}/onboarding?error=profile_fetch_failed`)
+    }
 
     // Créer ou mettre à jour l'utilisateur en DB
     const user = await db.user.upsert({
