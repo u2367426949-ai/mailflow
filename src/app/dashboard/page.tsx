@@ -799,7 +799,7 @@ function ProToolsTab({ emails, stats, user }: {
     return () => clearInterval(interval)
   }, [sortPolling])
 
-  // Charger le statut initial au mount
+  // Charger le statut initial au mount (ou quand le plan change)
   useEffect(() => {
     if (!isPro) return
     fetch('/api/emails/sort-all')
@@ -811,8 +811,7 @@ function ProToolsTab({ emails, stats, user }: {
         }
       })
       .catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isPro])
 
   const handleStartSort = async () => {
     try {
@@ -841,12 +840,12 @@ function ProToolsTab({ emails, stats, user }: {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
-  // Envoyer le premier message d'accueil au mount
+  // Envoyer le premier message d'accueil quand isPro devient true
   useEffect(() => {
     if (!isPro || chatMessages.length > 0) return
     handleSendChat('Bonjour, analyse ma boîte mail et propose-moi des règles de tri personnalisées.')
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isPro])
 
   const handleSendChat = async (overrideMsg?: string) => {
     const msg = overrideMsg ?? chatInput.trim()
