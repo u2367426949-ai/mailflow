@@ -144,15 +144,37 @@ export async function POST(request: NextRequest) {
 }
 
 // ----------------------------------------------------------
-// Traitement asynchrone du tri complet
+// Traitement asynchrone du tri complet — VERSION OPTIMISÉE
 // ----------------------------------------------------------
+// Performances :
+//   - Classification : 5 appels OpenAI en parallèle (au lieu de séquentiel)
+//   - Labels Gmail : cache mémoire (1 appel par catégorie, pas par email)
+//   - Labelling Gmail : 5 en parallèle
+//   - Progression : mise à jour tous les BATCH_SIZE emails
+// ----------------------------------------------------------
+
 async function processSortJob(userId: string, customRules: string | null) {
-  const BATCH_SIZE = 10
-  const MAX_EMAILS = 50000 // Limite Pro
+  const CONCURRENCY = 5     // Appels OpenAI simultanés
+  const BATCH_SIZE = 20     // Taille du batch pour la progression
+  const MAX_EMAILS = 50000  // Limite Pro
+
+  // Cache des label IDs Gmail (catégorie → labelId)
+  const labelCache = new Map<string, string | null>()
+
+  async function getCachedLabel(category: string): Promise<string | null> {
+    if (labelCache.has(category)) return labelCache.get(category)!
+    try {
+      const labelId = await getOrCreateCategoryLabel(userId, category)
+      labelCache.set(category, labelId)
+      return labelId
+    } catch {
+      labelCache.set(category, null)
+      return null
+    }
+  }
 
   try {
-    // Phase 1 : Compter les emails non traités dans Gmail
-    // On récupère d'abord un lot large de messages
+    // Phase 1 : Récupérer les emails Gmail
     const allEmails = await fetchNewEmails(userId, undefined, MAX_EMAILS)
 
     // Filtrer ceux qu'on a déjà en DB
@@ -179,7 +201,7 @@ async function processSortJob(userId: string, customRules: string | null) {
       return
     }
 
-    // Phase 2 : Classifier et labelliser par batches
+    // Phase 2 : Classifier + Labelliser en parallèle par batch
     let processed = 0
     let labeled = 0
     let errors = 0
@@ -188,21 +210,45 @@ async function processSortJob(userId: string, customRules: string | null) {
       const batch = newEmails.slice(i, i + BATCH_SIZE)
       const batchNum = Math.floor(i / BATCH_SIZE) + 1
 
-      for (const gmailEmail of batch) {
-        try {
-          // Classifier
-          const classification = await classifyEmail(
-            {
-              from: gmailEmail.from,
-              to: gmailEmail.to,
-              subject: gmailEmail.subject,
-              snippet: gmailEmail.snippet,
-            },
-            customRules
-          )
+      // --- Étape A : Classifier N emails en parallèle (par slots de CONCURRENCY) ---
+      interface ClassifiedEmail {
+        gmailEmail: typeof batch[0]
+        classification: Awaited<ReturnType<typeof classifyEmail>>
+      }
+      const classified: ClassifiedEmail[] = []
 
-          // Sauvegarder en DB
-          const savedEmail = await db.email.create({
+      for (let j = 0; j < batch.length; j += CONCURRENCY) {
+        const slot = batch.slice(j, j + CONCURRENCY)
+        const results = await Promise.allSettled(
+          slot.map((gmailEmail) =>
+            classifyEmail(
+              {
+                from: gmailEmail.from,
+                to: gmailEmail.to,
+                subject: gmailEmail.subject,
+                snippet: gmailEmail.snippet,
+              },
+              customRules
+            ).then((classification) => ({ gmailEmail, classification }))
+          )
+        )
+
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            classified.push(r.value)
+          } else {
+            errors++
+            console.error('[SortAll] Classification error:', r.reason?.message ?? 'unknown')
+          }
+        }
+      }
+
+      // --- Étape B : Sauvegarder en DB (séquentiel car createMany ne retourne pas les IDs) ---
+      const savedEmails: Array<{ dbId: string; gmailId: string; category: string; confidence: number }> = []
+
+      for (const { gmailEmail, classification } of classified) {
+        try {
+          const saved = await db.email.create({
             data: {
               userId,
               gmailId: gmailEmail.id,
@@ -226,36 +272,45 @@ async function processSortJob(userId: string, customRules: string | null) {
               },
             },
           })
-
+          savedEmails.push({
+            dbId: saved.id,
+            gmailId: gmailEmail.id,
+            category: classification.category,
+            confidence: classification.confidence,
+          })
           processed++
-
-          // Labelliser dans Gmail si confiance suffisante
-          if (classification.confidence >= 0.6 && classification.category !== 'unknown') {
-            try {
-              const labelId = await getOrCreateCategoryLabel(userId, classification.category)
-              if (labelId) {
-                await applyLabelToEmail(userId, gmailEmail.id, labelId)
-                await db.email.update({
-                  where: { id: savedEmail.id },
-                  data: { isLabeled: true },
-                })
-                labeled++
-              }
-            } catch {
-              // Erreur de labelling non bloquante
-            }
-          }
         } catch (err) {
           errors++
-          const msg = err instanceof Error ? err.message : 'unknown'
-          console.error(`[SortAll] Error processing email:`, msg)
+          console.error('[SortAll] DB save error:', err instanceof Error ? err.message : 'unknown')
         }
-
-        // Pause entre emails (rate limit OpenAI + Gmail)
-        await new Promise((resolve) => setTimeout(resolve, 150))
       }
 
-      // Mettre à jour la progression après chaque batch
+      // --- Étape C : Labelliser dans Gmail en parallèle (par slots de CONCURRENCY) ---
+      const toLabel = savedEmails.filter(
+        (e) => e.confidence >= 0.6 && e.category !== 'unknown'
+      )
+
+      for (let j = 0; j < toLabel.length; j += CONCURRENCY) {
+        const slot = toLabel.slice(j, j + CONCURRENCY)
+        const labelResults = await Promise.allSettled(
+          slot.map(async (e) => {
+            const labelId = await getCachedLabel(e.category)
+            if (!labelId) return false
+            await applyLabelToEmail(userId, e.gmailId, labelId)
+            await db.email.update({
+              where: { id: e.dbId },
+              data: { isLabeled: true },
+            })
+            return true
+          })
+        )
+
+        for (const r of labelResults) {
+          if (r.status === 'fulfilled' && r.value) labeled++
+        }
+      }
+
+      // --- Étape D : Mise à jour de la progression ---
       await updateSortJob(userId, {
         currentBatch: batchNum,
         processed,
@@ -273,13 +328,12 @@ async function processSortJob(userId: string, customRules: string | null) {
       errors,
     })
 
-    // Mettre à jour le lastSyncAt
     await db.user.update({
       where: { id: userId },
       data: { lastSyncAt: new Date() },
     })
 
-    console.log(`[SortAll] Completed for user ${userId}: ${processed} processed, ${labeled} labeled, ${errors} errors`)
+    console.log(`[SortAll] ✅ Completed for user ${userId}: ${processed} processed, ${labeled} labeled, ${errors} errors`)
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erreur inattendue'
     console.error('[SortAll] Job failed:', msg)

@@ -359,14 +359,23 @@ export async function classifyEmailsBatch(
   customRules?: string | null
 ): Promise<Map<string, ClassificationResult>> {
   const results = new Map<string, ClassificationResult>()
+  const CONCURRENCY = 5
 
-  // Traitement séquentiel pour respecter les rate limits OpenAI
-  for (const { id, email } of emails) {
-    const result = await classifyEmail(email, customRules)
-    results.set(id, result)
+  // Traitement par slots de CONCURRENCY en parallèle
+  for (let i = 0; i < emails.length; i += CONCURRENCY) {
+    const slot = emails.slice(i, i + CONCURRENCY)
+    const settled = await Promise.allSettled(
+      slot.map(async ({ id, email }) => {
+        const result = await classifyEmail(email, customRules)
+        return { id, result }
+      })
+    )
 
-    // Pause de 100ms entre les requêtes (évite le rate limit OpenAI)
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    for (const r of settled) {
+      if (r.status === 'fulfilled') {
+        results.set(r.value.id, r.value.result)
+      }
+    }
   }
 
   return results

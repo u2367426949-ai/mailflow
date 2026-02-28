@@ -226,9 +226,9 @@ export async function fetchNewEmails(
   const messageIds = listResponse.data.messages ?? []
   if (messageIds.length === 0) return []
 
-  // Récupérer les détails de chaque message (en batch de 10 pour performance)
+  // Récupérer les détails de chaque message (en batch de 25 pour performance)
   const messages: GmailMessage[] = []
-  const BATCH_SIZE = 10
+  const BATCH_SIZE = 25
 
   for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
     const batch = messageIds.slice(i, i + BATCH_SIZE)
