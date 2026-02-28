@@ -186,6 +186,27 @@ export async function middleware(request: NextRequest) {
     // On laisse passer — le dashboard vérifie le token côté serveur via /api/me
   }
 
+  // === Redirection si déjà connecté (login / onboarding) ===
+  // Un utilisateur avec un JWT valide n'a pas besoin de repasser par ces pages
+  if (pathname === '/login' || pathname === '/onboarding') {
+    const token = request.cookies.get('mailflow_session')?.value
+    if (token) {
+      try {
+        const { payload } = await jwtVerify(token, JWT_SECRET)
+        // Token valide → rediriger selon l'état onboarding
+        const isOnboarded = payload['isOnboarded'] as boolean | undefined
+        const destination = isOnboarded ? '/dashboard' : '/onboarding?auth=success'
+        // Éviter une boucle infinie sur /onboarding
+        if (pathname === '/onboarding' && !isOnboarded) {
+          return NextResponse.next()
+        }
+        return NextResponse.redirect(new URL(destination, request.url))
+      } catch {
+        // Token invalide/expiré → laisser passer, le cookie sera nettoyé par la page
+      }
+    }
+  }
+
   return NextResponse.next()
 }
 
@@ -197,5 +218,7 @@ export const config = {
     '/api/:path*',
     '/dashboard',
     '/dashboard/:path*',
+    '/login',
+    '/onboarding',
   ],
 }
