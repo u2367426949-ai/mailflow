@@ -1,7 +1,8 @@
 // ============================================================
 // MailFlow — Route API : Tri complet de la boîte mail
-// POST /api/emails/sort-all — lance le tri massif
-// GET  /api/emails/sort-all — récupère la progression
+// POST   /api/emails/sort-all — lance le tri massif
+// GET    /api/emails/sort-all — récupère la progression
+// DELETE /api/emails/sort-all — reset le job bloqué
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -85,6 +86,36 @@ export async function GET(request: NextRequest) {
 
   const job = await getSortJob(userId)
   return NextResponse.json({ job })
+}
+
+// ----------------------------------------------------------
+// DELETE — Reset le job de tri (débloquer un tri coincé)
+// ----------------------------------------------------------
+export async function DELETE(request: NextRequest) {
+  const userId = await getUserIdFromRequest(request)
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const fullReset = searchParams.get('full') === 'true'
+
+  if (fullReset) {
+    // Reset complet : supprime tous les emails triés + reset le job
+    await db.email.deleteMany({ where: { userId } })
+    await updateSortJob(userId, { ...DEFAULT_JOB })
+    return NextResponse.json({
+      success: true,
+      message: 'Compte réinitialisé : tous les emails triés ont été supprimés',
+    })
+  }
+
+  // Reset simple : remet le job en idle
+  await updateSortJob(userId, { ...DEFAULT_JOB })
+  return NextResponse.json({
+    success: true,
+    message: 'Tri réinitialisé avec succès',
+  })
 }
 
 // ----------------------------------------------------------

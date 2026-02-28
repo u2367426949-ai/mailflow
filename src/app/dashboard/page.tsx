@@ -30,6 +30,9 @@ import {
   Send,
   Bot,
   Sparkles,
+  RotateCcw,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import { EmailList } from '@/components/EmailList'
 import { StatsCard, StatsGrid } from '@/components/StatsCard'
@@ -624,6 +627,9 @@ function SettingsTab({ user }: { user: UserSession | null }) {
   const [timezone, setTimezone] = useState(user?.timezone ?? 'Europe/Paris')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetDone, setResetDone] = useState(false)
+  const [resetConfirmText, setResetConfirmText] = useState('')
 
   const handleSave = async () => {
     setSaving(true)
@@ -648,6 +654,24 @@ function SettingsTab({ user }: { user: UserSession | null }) {
   const handleLogout = async () => {
     document.cookie = 'mailflow_session=; path=/; max-age=0'
     window.location.href = '/'
+  }
+
+  const handleFullReset = async () => {
+    if (resetConfirmText !== 'RESET') return
+    setResetLoading(true)
+    setResetDone(false)
+    try {
+      const res = await fetch('/api/emails/sort-all?full=true', { method: 'DELETE' })
+      if (res.ok) {
+        setResetDone(true)
+        setResetConfirmText('')
+        setTimeout(() => setResetDone(false), 5000)
+      }
+    } catch (err) {
+      console.error('[Settings] Reset error:', err)
+    } finally {
+      setResetLoading(false)
+    }
   }
 
   return (
@@ -731,6 +755,46 @@ function SettingsTab({ user }: { user: UserSession | null }) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Réinitialisation du compte */}
+      <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.03] p-6">
+        <h3 className="text-[#f0f0f5] font-semibold mb-1 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-red-400" />
+          Réinitialiser le compte
+        </h3>
+        <p className="text-xs text-[#5a5a66] mb-4">
+          Supprime tous les emails triés et réinitialise le processus de tri. Les labels Gmail déjà appliqués ne seront pas supprimés. Cette action est irréversible.
+        </p>
+        {resetDone ? (
+          <div className="flex items-center gap-2 text-sm text-emerald-400">
+            <CheckCircle2 className="w-4 h-4" />
+            Compte réinitialisé avec succès
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-[#5a5a66] mb-1.5">
+                Tapez <span className="font-mono text-red-400">RESET</span> pour confirmer
+              </label>
+              <input
+                type="text"
+                value={resetConfirmText}
+                onChange={(e) => setResetConfirmText(e.target.value)}
+                placeholder="RESET"
+                className="w-48 px-3 py-2 bg-[#050507] border border-red-500/20 rounded-xl text-sm text-[#f0f0f5] focus:outline-none focus:border-red-500/50 transition-colors placeholder:text-[#2a2a32]"
+              />
+            </div>
+            <button
+              onClick={handleFullReset}
+              disabled={resetConfirmText !== 'RESET' || resetLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              {resetLoading ? 'Réinitialisation...' : 'Réinitialiser le compte'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -823,6 +887,20 @@ function ProToolsTab({ emails, stats, user }: {
         setSortJob((prev) => prev ? { ...prev, status: 'running', processed: 0, labeled: 0, errors: 0 } : null)
       }
     } catch { /* silencieux */ }
+  }
+
+  const [resetting, setResetting] = useState(false)
+  const handleResetSort = async () => {
+    if (!confirm('Réinitialiser le tri ? Cela débloquera le processus de tri.')) return
+    setResetting(true)
+    try {
+      const res = await fetch('/api/emails/sort-all', { method: 'DELETE' })
+      if (res.ok) {
+        setSortJob({ status: 'idle', startedAt: null, completedAt: null, totalEmails: 0, processed: 0, labeled: 0, errors: 0, currentBatch: 0, totalBatches: 0, lastError: null })
+        setSortPolling(false)
+      }
+    } catch { /* silencieux */ }
+    setResetting(false)
   }
 
   // --- Agent IA Chat ---
@@ -1147,9 +1225,19 @@ function ProToolsTab({ emails, stats, user }: {
                 </div>
 
                 {/* Indicateur animé */}
-                <div className="flex items-center gap-2 text-xs text-blue-400">
-                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                  Tri en cours — vous pouvez quitter cette page, le tri continuera en arrière-plan
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-blue-400">
+                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                    Tri en cours — vous pouvez quitter cette page, le tri continuera en arrière-plan
+                  </div>
+                  <button
+                    onClick={handleResetSort}
+                    disabled={resetting}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 rounded-lg transition-colors"
+                  >
+                    <RotateCcw className={`w-3 h-3 ${resetting ? 'animate-spin' : ''}`} />
+                    {resetting ? 'Reset...' : 'Débloquer'}
+                  </button>
                 </div>
               </div>
             ) : sortJob?.status === 'completed' ? (
@@ -1205,13 +1293,23 @@ function ProToolsTab({ emails, stats, user }: {
                     </p>
                   )}
                 </div>
-                <button
-                  onClick={handleStartSort}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
-                >
-                  <Inbox className="w-4 h-4" />
-                  Réessayer
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleStartSort}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+                  >
+                    <Inbox className="w-4 h-4" />
+                    Réessayer
+                  </button>
+                  <button
+                    onClick={handleResetSort}
+                    disabled={resetting}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 rounded-lg transition-colors"
+                  >
+                    <RotateCcw className={`w-3 h-3 ${resetting ? 'animate-spin' : ''}`} />
+                    {resetting ? 'Reset...' : 'Réinitialiser'}
+                  </button>
+                </div>
               </div>
             ) : (
               /* État idle — bouton lancer */
