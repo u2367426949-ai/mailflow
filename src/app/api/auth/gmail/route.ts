@@ -13,6 +13,7 @@ import {
   encryptToken,
 } from '@/lib/gmail'
 import { db } from '@/lib/db'
+import { sendWelcomeEmail } from '@/lib/emails'
 
 export const dynamic = 'force-dynamic'
 
@@ -197,6 +198,9 @@ export async function GET(request: NextRequest) {
         ],
         skipDuplicates: true,
       })
+
+      // Envoyer l'email de bienvenue pour les nouveaux utilisateurs (non bloquant)
+      sendWelcomeEmail({ email: user.email, name: user.name }).catch(() => {})
     }
 
     // Émettre un JWT de session

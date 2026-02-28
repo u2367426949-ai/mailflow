@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Star,
 } from 'lucide-react'
+import { PricingSection } from '@/components/PricingSection'
 
 // ----------------------------------------------------------
 // Composants locaux
@@ -231,121 +232,6 @@ function FeaturesSection() {
             <div key={item} className="flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
               <span className="text-[#a0a0a0] text-sm">{item}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function PricingSection() {
-  const plans = [
-    {
-      name: 'Starter',
-      price: '9',
-      emails: '100 emails/jour',
-      features: [
-        'Tri IA GPT-4o-mini',
-        'Labels Gmail automatiques',
-        'Digest quotidien',
-        '6 catégories',
-        'Feedback loop',
-        'Support email',
-      ],
-      highlighted: false,
-      cta: 'Commencer',
-    },
-    {
-      name: 'Pro',
-      price: '29',
-      emails: '500 emails/jour',
-      badge: 'Populaire',
-      features: [
-        'Tout Starter',
-        'Catégories personnalisées',
-        'Export CSV',
-        'Stats avancées',
-        'Priorité support',
-        'Onboarding dédié',
-      ],
-      highlighted: true,
-      cta: 'Choisir Pro',
-    },
-    {
-      name: 'Business',
-      price: '79',
-      emails: '2000 emails/jour',
-      features: [
-        'Tout Pro',
-        'Multi-comptes Gmail',
-        'Accès API',
-        'SLA 99.9%',
-        'Support prioritaire 24/7',
-        'Facturation annuelle -20%',
-      ],
-      highlighted: false,
-      cta: 'Contacter',
-    },
-  ]
-
-  return (
-    <section id="pricing" className="py-24 border-t border-[#2a2a2a]">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-[#f5f5f5] mb-4">
-            Tarifs simples et transparents
-          </h2>
-          <p className="text-[#a0a0a0] text-lg">
-            14 jours d'essai gratuit sur tous les plans. Sans carte bancaire.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {plans.map((plan) => (
-            <div
-              key={plan.name}
-              className={`relative rounded-2xl border p-6 ${
-                plan.highlighted
-                  ? 'border-blue-600 bg-blue-950/20'
-                  : 'border-[#2a2a2a] bg-[#141414]'
-              }`}
-            >
-              {plan.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
-                    {plan.badge}
-                  </span>
-                </div>
-              )}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-[#f5f5f5] mb-1">{plan.name}</h3>
-                <div className="flex items-end gap-1 mb-1">
-                  <span className="text-4xl font-bold text-[#f5f5f5]">{plan.price}€</span>
-                  <span className="text-[#a0a0a0] mb-1">/mois</span>
-                </div>
-                <p className="text-sm text-[#6a6a6a]">{plan.emails}</p>
-              </div>
-
-              <ul className="space-y-3 mb-8">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm text-[#a0a0a0]">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="/onboarding"
-                className={`block w-full text-center py-3 px-6 rounded-xl font-semibold text-sm transition-all ${
-                  plan.highlighted
-                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25'
-                    : 'bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5]'
-                }`}
-              >
-                {plan.cta}
-              </Link>
             </div>
           ))}
         </div>
