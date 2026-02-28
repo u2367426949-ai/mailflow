@@ -181,7 +181,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/dashboard')) {
     const token = request.cookies.get('mailflow_session')?.value
     if (!token) {
-      return NextResponse.redirect(new URL('/', request.url))
+      return NextResponse.redirect(new URL('/login', request.url))
     }
     // On laisse passer — le dashboard vérifie le token côté serveur via /api/me
   }

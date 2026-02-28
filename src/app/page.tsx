@@ -40,7 +40,7 @@ function NavBar() {
           </nav>
           <div className="flex items-center gap-3">
             <Link
-              href="/dashboard"
+              href="/login"
               className="text-sm text-[#a0a0a0] hover:text-[#f5f5f5] transition-colors hidden sm:block"
             >
               Connexion
