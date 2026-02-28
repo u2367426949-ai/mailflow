@@ -88,14 +88,14 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
           key={i}
           className={`h-1.5 rounded-full transition-all duration-300 ${
             i < current
-              ? 'bg-blue-600 w-8'
+              ? 'bg-indigo-600 w-8'
               : i === current
-              ? 'bg-blue-400 w-8'
-              : 'bg-[#2a2a2a] w-4'
+              ? 'bg-indigo-400 w-8'
+              : 'bg-white/[0.06] w-4'
           }`}
         />
       ))}
-      <span className="text-xs text-[#6a6a6a] ml-2">
+      <span className="text-xs text-[#5a5a66] ml-2">
         {current + 1}/{total}
       </span>
     </div>
@@ -131,18 +131,18 @@ function Step1Connect({
   return (
     <div className="max-w-lg mx-auto">
       <div className="text-center mb-8">
-        <div className="w-16 h-16 rounded-2xl bg-blue-950/50 border border-blue-800/30 flex items-center justify-center mx-auto mb-4">
-          <Mail className="w-8 h-8 text-blue-400" />
+        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4">
+          <Mail className="w-8 h-8 text-indigo-400" />
         </div>
-        <h2 className="text-2xl font-bold text-[#f5f5f5] mb-2">Connecte ta boîte mail</h2>
-        <p className="text-[#a0a0a0] leading-relaxed">
+        <h2 className="text-2xl font-bold text-[#f0f0f5] mb-2">Connecte ta boîte mail</h2>
+        <p className="text-[#94949e] leading-relaxed">
           MailFlow ne stockera jamais tes mots de passe — nous utilisons l'authentification
           sécurisée OAuth 2.0 de Google.
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg border border-red-800/50 bg-red-950/20 flex items-center gap-2">
+        <div className="mb-4 p-3 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
           <span className="text-red-400 text-sm">
             {error === 'access_denied'
@@ -188,7 +188,7 @@ function Step1Connect({
       {/* Outlook (bientôt) */}
       <button
         disabled
-        className="w-full flex items-center justify-center gap-3 px-6 py-4 border border-[#2a2a2a] bg-[#141414] text-[#6a6a6a] font-medium rounded-xl opacity-50 cursor-not-allowed"
+        className="w-full flex items-center justify-center gap-3 px-6 py-4 border border-white/[0.06] bg-[#0c0c10] text-[#5a5a66] font-medium rounded-xl opacity-50 cursor-not-allowed"
       >
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0078d4">
           <path d="M7.462 0H.54C.243 0 0 .243 0 .54v6.923c0 .297.243.54.54.54h6.922a.54.54 0 0 0 .54-.54V.54A.54.54 0 0 0 7.462 0zm8.076 0h-6.923c-.297 0-.54.243-.54.54v6.923c0 .297.243.54.54.54h6.923c.297 0 .54-.243.54-.54V.54a.54.54 0 0 0-.54-.54zM7.462 8.077H.54a.54.54 0 0 0-.54.54v6.922c0 .297.243.54.54.54h6.922a.54.54 0 0 0 .54-.54V8.617a.54.54 0 0 0-.54-.54zm8.076 0h-6.923a.54.54 0 0 0-.54.54v6.922c0 .297.243.54.54.54h6.923c.297 0 .54-.243.54-.54V8.617a.54.54 0 0 0-.54-.54z" />
@@ -203,7 +203,7 @@ function Step1Connect({
           { icon: Zap, text: 'Connexion sécurisée OAuth 2.0' },
           { icon: CheckCircle2, text: 'Révocable à tout moment depuis Google' },
         ].map((item) => (
-          <div key={item.text} className="flex items-center gap-3 text-sm text-[#6a6a6a]">
+          <div key={item.text} className="flex items-center gap-3 text-sm text-[#5a5a66]">
             <item.icon className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             {item.text}
           </div>
@@ -240,10 +240,10 @@ function Step2Customize({
   return (
     <div className="max-w-lg mx-auto">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-[#f5f5f5] mb-2">
+        <h2 className="text-2xl font-bold text-[#f0f0f5] mb-2">
           Personnalise tes catégories
         </h2>
-        <p className="text-[#a0a0a0]">
+        <p className="text-[#94949e]">
           Active ou désactive les catégories selon tes besoins.
           Tu pourras les modifier plus tard.
         </p>
@@ -256,34 +256,34 @@ function Step2Customize({
             onClick={() => toggle(cat.name)}
             className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${
               cat.enabled
-                ? 'border-[#3a3a3a] bg-[#141414] hover:border-[#4a4a4a]'
-                : 'border-[#2a2a2a] bg-[#0f0f0f] opacity-60'
+                ? 'border-white/[0.08] bg-[#0c0c10] hover:border-white/[0.15]'
+                : 'border-white/[0.04] bg-[#050507] opacity-60'
             }`}
           >
             <span className="text-2xl flex-shrink-0">{cat.emoji}</span>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-[#f5f5f5]">{cat.displayName}</div>
-              <div className="text-xs text-[#6a6a6a] mt-0.5">{cat.description}</div>
+              <div className="text-sm font-semibold text-[#f0f0f5]">{cat.displayName}</div>
+              <div className="text-xs text-[#5a5a66] mt-0.5">{cat.description}</div>
             </div>
             <div className="flex-shrink-0">
               {cat.enabled ? (
-                <ToggleRight className="w-6 h-6 text-blue-400" />
+                <ToggleRight className="w-6 h-6 text-indigo-400" />
               ) : (
-                <ToggleLeft className="w-6 h-6 text-[#3a3a3a]" />
+                <ToggleLeft className="w-6 h-6 text-white/[0.1]" />
               )}
             </div>
           </button>
         ))}
       </div>
 
-      <p className="text-xs text-[#6a6a6a] mb-6 text-center">
+      <p className="text-xs text-[#5a5a66] mb-6 text-center">
         {enabledCount} catégorie{enabledCount > 1 ? 's' : ''} activée{enabledCount > 1 ? 's' : ''}
       </p>
 
       <div className="flex gap-3">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-5 py-3 border border-[#3a3a3a] text-[#a0a0a0] hover:text-[#f5f5f5] hover:border-[#4a4a4a] rounded-xl text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-5 py-3 border border-white/[0.08] text-[#94949e] hover:text-[#f0f0f5] hover:border-white/[0.15] rounded-xl text-sm font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour
@@ -320,11 +320,11 @@ function Step3Activate({
   return (
     <div className="max-w-lg mx-auto">
       <div className="text-center mb-8">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-950/50 border border-emerald-800/30 flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
           <Zap className="w-8 h-8 text-emerald-400" />
         </div>
-        <h2 className="text-2xl font-bold text-[#f5f5f5] mb-2">C'est parti ! 🚀</h2>
-        <p className="text-[#a0a0a0] leading-relaxed">
+        <h2 className="text-2xl font-bold text-[#f0f0f5] mb-2">C'est parti ! 🚀</h2>
+        <p className="text-[#94949e] leading-relaxed">
           MailFlow va maintenant analyser tes emails entrants et les trier automatiquement.
         </p>
       </div>
@@ -338,12 +338,12 @@ function Step3Activate({
         ].map((item) => (
           <div
             key={item.text}
-            className="flex items-center gap-3 p-3 rounded-xl border border-[#2a2a2a] bg-[#141414]"
+            className="flex items-center gap-3 p-3 rounded-xl border border-white/[0.06] bg-[#0c0c10]"
           >
-            <div className="w-8 h-8 rounded-lg bg-emerald-950/50 flex items-center justify-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
               <item.icon className="w-4 h-4 text-emerald-400" />
             </div>
-            <span className="text-sm text-[#a0a0a0]">{item.text}</span>
+            <span className="text-sm text-[#94949e]">{item.text}</span>
           </div>
         ))}
       </div>
@@ -353,30 +353,30 @@ function Step3Activate({
         onClick={onToggleDigest}
         className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left mb-6 ${
           digestEnabled
-            ? 'border-blue-800/50 bg-blue-950/20'
-            : 'border-[#2a2a2a] bg-[#141414] opacity-70'
+            ? 'border-indigo-500/20 bg-indigo-500/5'
+            : 'border-white/[0.06] bg-[#0c0c10] opacity-70'
         }`}
       >
         <div
           className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-            digestEnabled ? 'bg-blue-950/50' : 'bg-[#1e1e1e]'
+            digestEnabled ? 'bg-indigo-500/10' : 'bg-white/[0.03]'
           }`}
         >
-          <Bell className={`w-5 h-5 ${digestEnabled ? 'text-blue-400' : 'text-[#6a6a6a]'}`} />
+          <Bell className={`w-5 h-5 ${digestEnabled ? 'text-indigo-400' : 'text-[#5a5a66]'}`} />
         </div>
         <div className="flex-1">
-          <div className="text-sm font-semibold text-[#f5f5f5]">
+          <div className="text-sm font-semibold text-[#f0f0f5]">
             Recevoir le digest quotidien
           </div>
-          <div className="text-xs text-[#6a6a6a] mt-0.5">
+          <div className="text-xs text-[#5a5a66] mt-0.5">
             Un résumé de tes emails importants chaque matin à 8h
           </div>
         </div>
         <div className="flex-shrink-0">
           {digestEnabled ? (
-            <ToggleRight className="w-6 h-6 text-blue-400" />
+            <ToggleRight className="w-6 h-6 text-indigo-400" />
           ) : (
-            <ToggleLeft className="w-6 h-6 text-[#3a3a3a]" />
+            <ToggleLeft className="w-6 h-6 text-white/[0.1]" />
           )}
         </div>
       </button>
@@ -384,7 +384,7 @@ function Step3Activate({
       <div className="flex gap-3">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-5 py-3 border border-[#3a3a3a] text-[#a0a0a0] hover:text-[#f5f5f5] hover:border-[#4a4a4a] rounded-xl text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-5 py-3 border border-white/[0.08] text-[#94949e] hover:text-[#f0f0f5] hover:border-white/[0.15] rounded-xl text-sm font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour
@@ -466,13 +466,15 @@ export default function OnboardingPage() {
   const TOTAL_STEPS = 3
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+    <div className="min-h-screen bg-[#050507] flex flex-col">
       {/* Header */}
-      <header className="border-b border-[#2a2a2a] px-4 sm:px-6 py-4">
+      <header className="border-b border-white/[0.06] px-4 sm:px-6 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <Mail className="w-5 h-5 text-blue-400" />
-            <span className="font-bold text-[#f5f5f5]">MailFlow</span>
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+              <Mail className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="font-bold text-[#f0f0f5]">MailFlow</span>
           </Link>
           <StepIndicator current={step} total={TOTAL_STEPS} />
         </div>
@@ -483,7 +485,7 @@ export default function OnboardingPage() {
         <div className="w-full max-w-lg">
           {/* Titre de l'étape */}
           <div className="text-center mb-2">
-            <span className="text-xs text-[#6a6a6a] uppercase tracking-widest font-medium">
+            <span className="text-xs text-[#5a5a66] uppercase tracking-widest font-medium">
               Étape {step + 1} sur {TOTAL_STEPS}
             </span>
           </div>
@@ -518,17 +520,17 @@ export default function OnboardingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#2a2a2a] px-4 sm:px-6 py-4">
-        <div className="max-w-2xl mx-auto flex items-center justify-center gap-4 text-xs text-[#6a6a6a]">
-          <Link href="/privacy" className="hover:text-[#a0a0a0] transition-colors">
+      <footer className="border-t border-white/[0.06] px-4 sm:px-6 py-4">
+        <div className="max-w-2xl mx-auto flex items-center justify-center gap-4 text-xs text-[#5a5a66]">
+          <Link href="/privacy" className="hover:text-[#94949e] transition-colors">
             Confidentialité
           </Link>
           <span>·</span>
-          <Link href="/terms" className="hover:text-[#a0a0a0] transition-colors">
+          <Link href="/terms" className="hover:text-[#94949e] transition-colors">
             CGV
           </Link>
           <span>·</span>
-          <a href="mailto:support@mailflow.ai" className="hover:text-[#a0a0a0] transition-colors">
+          <a href="mailto:support@mailflow.ai" className="hover:text-[#94949e] transition-colors">
             Support
           </a>
         </div>

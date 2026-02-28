@@ -27,43 +27,43 @@ const CATEGORY_CONFIG: Record<EmailCategory, CategoryConfig> = {
   urgent: {
     label: 'Urgent',
     emoji: '🔴',
-    className: 'bg-red-900/30 text-red-400 border border-red-800/50',
+    className: 'bg-red-500/10 text-red-400 border border-red-500/20',
     dotColor: 'bg-red-500',
   },
   personal: {
     label: 'Personnel',
     emoji: '👤',
-    className: 'bg-purple-900/30 text-purple-400 border border-purple-800/50',
+    className: 'bg-purple-500/10 text-purple-400 border border-purple-500/20',
     dotColor: 'bg-purple-500',
   },
   business: {
     label: 'Business',
     emoji: '💼',
-    className: 'bg-blue-900/30 text-blue-400 border border-blue-800/50',
+    className: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
     dotColor: 'bg-blue-500',
   },
   invoices: {
     label: 'Factures',
     emoji: '📄',
-    className: 'bg-amber-900/30 text-amber-400 border border-amber-800/50',
+    className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
     dotColor: 'bg-amber-500',
   },
   newsletters: {
     label: 'Newsletters',
     emoji: '📰',
-    className: 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/50',
+    className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
     dotColor: 'bg-emerald-500',
   },
   spam: {
     label: 'Spam',
     emoji: '🗑️',
-    className: 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50',
+    className: 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/20',
     dotColor: 'bg-zinc-500',
   },
   unknown: {
     label: 'Inconnu',
     emoji: '❓',
-    className: 'bg-zinc-800/50 text-zinc-400 border border-zinc-700/50',
+    className: 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20',
     dotColor: 'bg-zinc-400',
   },
 }
@@ -134,10 +134,10 @@ export function ConfidenceBadge({ confidence, className }: ConfidenceBadgeProps)
 
   const colorClass =
     pct >= 85
-      ? 'text-emerald-400 bg-emerald-900/30'
+      ? 'text-emerald-400 bg-emerald-500/10'
       : pct >= 60
-      ? 'text-amber-400 bg-amber-900/30'
-      : 'text-red-400 bg-red-900/30'
+      ? 'text-amber-400 bg-amber-500/10'
+      : 'text-red-400 bg-red-500/10'
 
   return (
     <span

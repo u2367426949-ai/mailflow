@@ -100,8 +100,8 @@ function EmailRow({
   return (
     <div
       className={clsx(
-        'group relative border-b border-[#2a2a2a] last:border-0 transition-colors hover:bg-[#1a1a1a]',
-        !email.isRead && 'bg-[#141414]',
+        'group relative border-b border-white/[0.06] last:border-0 transition-colors hover:bg-white/[0.02]',
+        !email.isRead && 'bg-white/[0.01]',
         email.isRead && 'opacity-80'
       )}
     >
@@ -109,9 +109,9 @@ function EmailRow({
         {/* Indicateur lu/non lu */}
         <div className="mt-1 flex-shrink-0">
           {email.isRead ? (
-            <MailOpen className="w-4 h-4 text-[#6a6a6a]" />
+            <MailOpen className="w-4 h-4 text-[#5a5a66]" />
           ) : (
-            <Mail className="w-4 h-4 text-blue-400" />
+            <Mail className="w-4 h-4 text-indigo-400" />
           )}
         </div>
 
@@ -122,32 +122,32 @@ function EmailRow({
               <span
                 className={clsx(
                   'text-sm truncate',
-                  email.isRead ? 'text-[#a0a0a0] font-normal' : 'text-[#f5f5f5] font-semibold'
+                  email.isRead ? 'text-[#94949e] font-normal' : 'text-[#f0f0f5] font-semibold'
                 )}
               >
                 {senderName}
               </span>
               {corrected && (
-                <span className="text-xs text-emerald-400 bg-emerald-900/20 px-1.5 py-0.5 rounded">
+                <span className="text-xs text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
                   ✓ Corrigé
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-xs text-[#6a6a6a]">{timeAgo}</span>
+              <span className="text-xs text-[#5a5a66]">{timeAgo}</span>
             </div>
           </div>
 
           <div
             className={clsx(
               'text-sm truncate mb-1',
-              email.isRead ? 'text-[#a0a0a0]' : 'text-[#f5f5f5]'
+              email.isRead ? 'text-[#94949e]' : 'text-[#f0f0f5]'
             )}
           >
             {email.subject}
           </div>
 
-          <div className="text-xs text-[#6a6a6a] truncate mb-2">{email.snippet}</div>
+          <div className="text-xs text-[#5a5a66] truncate mb-2">{email.snippet}</div>
 
           {/* Badges et actions */}
           <div className="flex items-center justify-between">
@@ -168,7 +168,7 @@ function EmailRow({
                 href={`https://mail.google.com/mail/u/0/#inbox/${email.gmailId}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-1.5 rounded hover:bg-[#2a2a2a] text-[#6a6a6a] hover:text-[#a0a0a0] transition-colors"
+                className="p-1.5 rounded-lg hover:bg-white/[0.05] text-[#5a5a66] hover:text-[#94949e] transition-colors"
                 title="Ouvrir dans Gmail"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -179,10 +179,10 @@ function EmailRow({
                 <button
                   onClick={() => setShowFeedback(!showFeedback)}
                   className={clsx(
-                    'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
+                    'flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-colors',
                     showFeedback
-                      ? 'bg-[#2a2a2a] text-[#a0a0a0]'
-                      : 'text-[#6a6a6a] hover:bg-[#2a2a2a] hover:text-[#a0a0a0]'
+                      ? 'bg-white/[0.05] text-[#94949e]'
+                      : 'text-[#5a5a66] hover:bg-white/[0.05] hover:text-[#94949e]'
                   )}
                   title="Mal classé ?"
                 >
@@ -201,8 +201,8 @@ function EmailRow({
 
           {/* Dropdown de correction */}
           {showFeedback && (
-            <div className="mt-2 p-2 rounded-lg border border-[#2a2a2a] bg-[#1e1e1e]">
-              <p className="text-xs text-[#a0a0a0] mb-2">
+            <div className="mt-2 p-2 rounded-xl border border-white/[0.06] bg-[#0c0c10]">
+              <p className="text-xs text-[#94949e] mb-2">
                 Dans quelle catégorie cet email devrait-il être ?
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -218,10 +218,10 @@ function EmailRow({
                       <CategoryBadge category={category} size="xs" showEmoji />
                     </button>
                   ))}
-                {submitting && <Loader2 className="w-4 h-4 animate-spin text-[#6a6a6a]" />}
+                {submitting && <Loader2 className="w-4 h-4 animate-spin text-[#5a5a66]" />}
               </div>
               {email.aiReason && (
-                <p className="mt-2 text-xs text-[#6a6a6a] italic">
+                <p className="mt-2 text-xs text-[#5a5a66] italic">
                   IA : {email.aiReason}
                 </p>
               )}
@@ -262,15 +262,15 @@ export function EmailList({
 
   if (loading) {
     return (
-      <div className={clsx('rounded-xl border border-[#2a2a2a] bg-[#141414]', className)}>
+      <div className={clsx('rounded-2xl border border-white/[0.06] bg-[#0c0c10]', className)}>
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="flex gap-3 px-4 py-3 border-b border-[#2a2a2a] last:border-0 animate-pulse">
-            <div className="w-4 h-4 mt-1 rounded bg-[#2a2a2a] flex-shrink-0" />
+          <div key={i} className="flex gap-3 px-4 py-3 border-b border-white/[0.06] last:border-0 animate-pulse">
+            <div className="w-4 h-4 mt-1 rounded bg-white/[0.06] flex-shrink-0" />
             <div className="flex-1">
-              <div className="h-3 w-24 bg-[#2a2a2a] rounded mb-2" />
-              <div className="h-3 w-full bg-[#2a2a2a] rounded mb-2" />
-              <div className="h-3 w-3/4 bg-[#2a2a2a] rounded mb-2" />
-              <div className="h-5 w-16 bg-[#2a2a2a] rounded" />
+              <div className="h-3 w-24 bg-white/[0.06] rounded mb-2" />
+              <div className="h-3 w-full bg-white/[0.06] rounded mb-2" />
+              <div className="h-3 w-3/4 bg-white/[0.06] rounded mb-2" />
+              <div className="h-5 w-16 bg-white/[0.06] rounded" />
             </div>
           </div>
         ))}
@@ -279,11 +279,11 @@ export function EmailList({
   }
 
   return (
-    <div className={clsx('rounded-xl border border-[#2a2a2a] bg-[#141414] overflow-hidden', className)}>
+    <div className={clsx('rounded-2xl border border-white/[0.06] bg-[#0c0c10] overflow-hidden', className)}>
       {/* Filtres par catégorie */}
       {showFilters && (
-        <div className="flex items-center gap-1 p-2 border-b border-[#2a2a2a] overflow-x-auto scrollbar-hide">
-          <Filter className="w-3.5 h-3.5 text-[#6a6a6a] flex-shrink-0 ml-1" />
+        <div className="flex items-center gap-1 p-2 border-b border-white/[0.06] overflow-x-auto scrollbar-hide">
+          <Filter className="w-3.5 h-3.5 text-[#5a5a66] flex-shrink-0 ml-1" />
           {categories.map((cat) => {
             const count = cat.id === 'all'
               ? emails.length
@@ -296,8 +296,8 @@ export function EmailList({
                 className={clsx(
                   'flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap',
                   activeFilter === cat.id
-                    ? 'bg-blue-600 text-white'
-                    : 'text-[#a0a0a0] hover:bg-[#2a2a2a]'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-[#94949e] hover:bg-white/[0.05]'
                 )}
               >
                 {cat.label}
@@ -305,7 +305,7 @@ export function EmailList({
                   <span
                     className={clsx(
                       'ml-1.5 text-[10px]',
-                      activeFilter === cat.id ? 'text-blue-200' : 'text-[#6a6a6a]'
+                      activeFilter === cat.id ? 'text-indigo-200' : 'text-[#5a5a66]'
                     )}
                   >
                     {count}
@@ -320,8 +320,8 @@ export function EmailList({
       {/* Liste des emails */}
       {filteredEmails.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <MailOpen className="w-10 h-10 text-[#3a3a3a] mb-3" />
-          <p className="text-[#6a6a6a] text-sm">
+          <MailOpen className="w-10 h-10 text-white/[0.08] mb-3" />
+          <p className="text-[#5a5a66] text-sm">
             {activeFilter === 'all'
               ? 'Aucun email traité pour le moment'
               : `Aucun email dans la catégorie "${activeFilter}"`}

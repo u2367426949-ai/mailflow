@@ -9,11 +9,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: '#0a0a0a',
-        surface: '#141414',
-        'surface-elevated': '#1e1e1e',
-        border: '#2a2a2a',
-        'border-subtle': '#3a3a3a',
+        bg: '#050507',
+        surface: '#0c0c10',
+        'surface-elevated': '#131318',
+        border: 'rgba(255, 255, 255, 0.06)',
+        'border-subtle': 'rgba(255, 255, 255, 0.12)',
+        accent: '#6366f1',
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
