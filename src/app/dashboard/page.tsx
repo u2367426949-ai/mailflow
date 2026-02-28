@@ -617,7 +617,6 @@ function SettingsTab({ user }: { user: UserSession | null }) {
   const [digestEnabled, setDigestEnabled] = useState(user?.digestEnabled ?? true)
   const [digestTime, setDigestTime] = useState(user?.digestTime ?? '08:00')
   const [timezone, setTimezone] = useState(user?.timezone ?? 'Europe/Paris')
-  const [customRules, setCustomRules] = useState(user?.settings?.customRules ?? '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -628,7 +627,7 @@ function SettingsTab({ user }: { user: UserSession | null }) {
       const res = await fetch('/api/me', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, digestEnabled, digestTime, timezone, customRules: customRules || null }),
+        body: JSON.stringify({ name, digestEnabled, digestTime, timezone }),
       })
       if (res.ok) {
         setSaved(true)
@@ -729,64 +728,6 @@ function SettingsTab({ user }: { user: UserSession | null }) {
         </div>
       </div>
 
-      {/* Agent IA — Règles personnalisées */}
-      <div className="rounded-xl border border-[#2a2a2a] bg-[#141414] p-6">
-        <h3 className="text-[#f5f5f5] font-semibold mb-1 flex items-center gap-2">
-          <Zap className="w-4 h-4 text-violet-400" />
-          Agent IA — Règles de tri personnalisées
-          {user?.plan === 'free' && (
-            <span className="ml-auto text-xs bg-amber-900/40 text-amber-400 border border-amber-800/50 px-2 py-0.5 rounded-full">
-              Pro requis
-            </span>
-          )}
-        </h3>
-        <p className="text-xs text-[#6a6a6a] mb-4">
-          Décrivez en langage naturel comment vous souhaitez que l&apos;IA trie vos emails. Ces instructions seront injectées dans chaque analyse.
-        </p>
-
-        {/* Exemples */}
-        <div className="mb-4 flex flex-wrap gap-2">
-          {[
-            'Les emails de mon boss (boss@acme.com) → toujours Urgent',
-            'Toute newsletter Substack → Newsletters',
-            'Factures Stripe ou PayPal → Factures, même si sujet vague',
-            'Emails en anglais de collègues → Business',
-          ].map((ex) => (
-            <button
-              key={ex}
-              onClick={() => setCustomRules((prev) => (prev ? prev + '\n' + ex : ex))}
-              disabled={user?.plan === 'free'}
-              className="text-xs px-2.5 py-1 rounded-full border border-[#2a2a2a] text-[#6a6a6a] hover:border-violet-700 hover:text-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              + {ex.slice(0, 40)}…
-            </button>
-          ))}
-        </div>
-
-        <textarea
-          value={customRules ?? ''}
-          onChange={(e) => setCustomRules(e.target.value)}
-          disabled={user?.plan === 'free'}
-          rows={6}
-          maxLength={4000}
-          placeholder={user?.plan === 'free'
-            ? 'Disponible à partir du plan Starter…'
-            : 'Ex: Les emails de support@stripe.com sont toujours des factures.\nLes messages de mon équipe (domaine @acme.com) sont prioritaires.\nIgnorer les newsletters LinkedIn.'}
-          className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-sm text-[#f5f5f5] placeholder-[#3a3a3a] focus:outline-none focus:border-violet-600 resize-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
-        />
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-[#4a4a4a]">{(customRules ?? '').length} / 4000 caractères</span>
-          {(customRules ?? '').length > 0 && (
-            <button
-              onClick={() => setCustomRules('')}
-              className="text-xs text-[#6a6a6a] hover:text-red-400 transition-colors"
-            >
-              Effacer
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Actions */}
       <div className="flex items-center justify-between">
         <button
@@ -820,6 +761,31 @@ function ProToolsTab({ emails, stats, user }: {
   const [relabeling, setRelabeling] = useState(false)
   const [relabelResult, setRelabelResult] = useState<{ labeled: number; errors: number } | null>(null)
   const [exportDone, setExportDone] = useState(false)
+
+  // --- Agent IA rules ---
+  const [customRules, setCustomRules] = useState(user?.settings?.customRules ?? '')
+  const [savingRules, setSavingRules] = useState(false)
+  const [savedRules, setSavedRules] = useState(false)
+
+  const handleSaveRules = async () => {
+    setSavingRules(true)
+    setSavedRules(false)
+    try {
+      const res = await fetch('/api/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customRules: customRules || null }),
+      })
+      if (res.ok) {
+        setSavedRules(true)
+        setTimeout(() => setSavedRules(false), 3000)
+      }
+    } catch (err) {
+      console.error('[ProTools] Save rules error:', err)
+    } finally {
+      setSavingRules(false)
+    }
+  }
 
   // --- Export CSV ---
   const handleExportCSV = () => {
@@ -917,6 +883,75 @@ function ProToolsTab({ emails, stats, user }: {
             Passer à Pro — 14j gratuits
           </Link>
         )}
+      </div>
+
+      {/* --- Agent IA — Règles personnalisées --- */}
+      <div className="rounded-xl border border-violet-800/40 bg-violet-950/10 p-6">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-violet-950/60 border border-violet-800/40 flex items-center justify-center flex-shrink-0">
+              <Zap className="w-4 h-4 text-violet-400" />
+            </div>
+            <div>
+              <h3 className="text-[#f5f5f5] font-semibold text-sm">Mon Agent IA</h3>
+              <p className="text-xs text-[#6a6a6a]">Dites à l&apos;IA comment trier <em>votre</em> boîte en langage naturel</p>
+            </div>
+          </div>
+          {savedRules && (
+            <span className="text-xs text-emerald-400 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Sauvegardé
+            </span>
+          )}
+        </div>
+
+        {/* Suggestions rapides */}
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {[
+            { label: '🚨 Boss → Urgent', rule: 'Les emails de mon manager direct → toujours Urgent' },
+            { label: '📰 Substack → News', rule: 'Toute newsletter Substack → Newsletters' },
+            { label: '💳 Stripe → Factures', rule: 'Emails de Stripe, PayPal ou factures → Factures' },
+            { label: '👥 Équipe → Business', rule: 'Emails de collègues (même domaine) → Business, priorité haute' },
+          ].map(({ label, rule }) => (
+            <button
+              key={label}
+              onClick={() => setCustomRules((prev) => (prev ? prev + '\n' + rule : rule))}
+              disabled={!isPro}
+              className="text-xs px-2.5 py-1 rounded-full bg-[#0a0a0a] border border-[#2a2a2a] text-[#8a8a8a] hover:border-violet-700 hover:text-violet-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          value={customRules ?? ''}
+          onChange={(e) => setCustomRules(e.target.value)}
+          disabled={!isPro}
+          rows={4}
+          maxLength={4000}
+          placeholder={!isPro
+            ? 'Disponible à partir du plan Pro…'
+            : 'Ex : Les emails de support@stripe.com → Factures\nMon boss (jean@acme.com) → toujours Urgent\nIgnorer les newsletters LinkedIn'}
+          className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-sm text-[#f5f5f5] placeholder-[#3a3a3a] focus:outline-none focus:border-violet-600 resize-none font-mono leading-relaxed disabled:opacity-40 disabled:cursor-not-allowed"
+        />
+
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-xs text-[#4a4a4a]">{(customRules ?? '').length} / 4000</span>
+          <div className="flex items-center gap-3">
+            {(customRules ?? '').length > 0 && (
+              <button onClick={() => setCustomRules('')} className="text-xs text-[#6a6a6a] hover:text-red-400 transition-colors">
+                Effacer
+              </button>
+            )}
+            <button
+              onClick={handleSaveRules}
+              disabled={savingRules || !isPro}
+              className="px-3 py-1.5 bg-violet-700 hover:bg-violet-600 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors"
+            >
+              {savingRules ? 'Sauvegarde…' : 'Appliquer'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* --- Tri boîte mail entière --- */}
