@@ -20,6 +20,7 @@ import {
   ChevronRight,
   CreditCard,
   Bell,
+  CheckCircle2,
 } from 'lucide-react'
 import { EmailList } from '@/components/EmailList'
 import { StatsCard, StatsGrid } from '@/components/StatsCard'
@@ -250,26 +251,295 @@ function DashboardHeader({
 }
 
 // ----------------------------------------------------------
-// Composant : Bannière plan gratuit
+// Composant : Bannière contextuelle selon le plan
 // ----------------------------------------------------------
-function FreePlanBanner() {
-  return (
-    <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-4 flex items-center gap-3">
-      <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
-      <div className="flex-1">
-        <p className="text-sm text-amber-400 font-medium">
-          Plan gratuit — Le tri IA est désactivé
-        </p>
-        <p className="text-xs text-amber-400/70 mt-0.5">
-          Passe à un plan payant pour activer la classification automatique de tes emails.
-        </p>
+function PlanBanner({ plan, onUpgrade }: { plan: string; onUpgrade: () => void }) {
+  if (plan === 'free') {
+    return (
+      <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-4 flex items-center gap-3">
+        <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+        <div className="flex-1">
+          <p className="text-sm text-amber-400 font-medium">Plan gratuit — Le tri IA est désactivé</p>
+          <p className="text-xs text-amber-400/70 mt-0.5">
+            Passe à Starter ou Pro pour activer la classification automatique.
+          </p>
+        </div>
+        <Link
+          href="/dashboard?tab=billing"
+          className="flex-shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-lg transition-colors"
+        >
+          Voir les offres
+        </Link>
       </div>
-      <Link
-        href="/dashboard?tab=billing"
-        className="flex-shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-lg transition-colors"
-      >
-        Upgrader
-      </Link>
+    )
+  }
+  if (plan === 'starter') {
+    return (
+      <div className="rounded-xl border border-blue-800/30 bg-blue-950/10 p-4 flex items-center gap-3">
+        <Zap className="w-5 h-5 text-blue-400 flex-shrink-0" />
+        <div className="flex-1">
+          <p className="text-sm text-blue-300 font-medium">Passez à Pro — Triez toute votre boîte mail</p>
+          <p className="text-xs text-blue-400/70 mt-0.5">
+            Pro permet de traiter jusqu'à 50 000 emails, catégories custom, export CSV et plus.
+          </p>
+        </div>
+        <button
+          onClick={onUpgrade}
+          className="flex-shrink-0 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors"
+        >
+          Passer à Pro
+        </button>
+      </div>
+    )
+  }
+  if (plan === 'pro') {
+    return (
+      <div className="rounded-xl border border-emerald-800/30 bg-emerald-950/10 p-4 flex items-center gap-3">
+        <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+        <div className="flex-1">
+          <p className="text-sm text-emerald-300 font-medium">Plan Pro actif ✓</p>
+          <p className="text-xs text-emerald-400/70 mt-0.5">
+            Tri de toute la boîte mail, catégories custom, export CSV — tout est activé.
+          </p>
+        </div>
+      </div>
+    )
+  }
+  if (plan === 'business') {
+    return (
+      <div className="rounded-xl border border-purple-800/30 bg-purple-950/10 p-4 flex items-center gap-3">
+        <CheckCircle2 className="w-5 h-5 text-purple-400 flex-shrink-0" />
+        <div className="flex-1">
+          <p className="text-sm text-purple-300 font-medium">Plan Business actif ✓</p>
+          <p className="text-xs text-purple-400/70 mt-0.5">
+            Accès API, multi-comptes, SLA 99.9% et support prioritaire 24/7 activés.
+          </p>
+        </div>
+      </div>
+    )
+  }
+  return null
+}
+
+// ----------------------------------------------------------
+// Composant : Carte plan dans l'onglet Billing
+// ----------------------------------------------------------
+const PLAN_DETAILS: Record<string, {
+  label: string
+  price: string
+  color: string
+  badge: string
+  limit: string
+  features: string[]
+}> = {
+  free: {
+    label: 'Gratuit',
+    price: '0€/mois',
+    color: 'text-zinc-400',
+    badge: 'bg-zinc-800 text-zinc-400',
+    limit: 'Tri IA désactivé',
+    features: ['Dashboard de base', 'Statistiques limitées'],
+  },
+  starter: {
+    label: 'Starter',
+    price: '9€/mois',
+    color: 'text-emerald-400',
+    badge: 'bg-emerald-900/50 text-emerald-400',
+    limit: "Jusqu'à 100 emails/jour",
+    features: ['Tri IA GPT-4o-mini', 'Labels Gmail', 'Digest quotidien', '6 catégories', 'Feedback loop'],
+  },
+  pro: {
+    label: 'Pro',
+    price: '29€/mois',
+    color: 'text-blue-400',
+    badge: 'bg-blue-900/50 text-blue-400',
+    limit: "Tri de toute la boîte mail (jusqu'à 50 000 msgs)",
+    features: ['Tout Starter', 'Catégories personnalisées', 'Export CSV', 'Stats avancées', 'Priorité support'],
+  },
+  business: {
+    label: 'Business',
+    price: 'Sur devis',
+    color: 'text-purple-400',
+    badge: 'bg-purple-900/50 text-purple-400',
+    limit: 'Volume sur-mesure',
+    features: ['Tout Pro', 'Multi-comptes Gmail', 'Accès API', 'SLA 99.9%', 'Onboarding dédié', 'Support 24/7'],
+  },
+}
+
+// ----------------------------------------------------------
+// Composant : Onglet Billing complet
+// ----------------------------------------------------------
+function BillingTab({
+  user,
+  onCheckout,
+  onPortal,
+}: {
+  user: UserSession | null
+  onCheckout: (plan: string) => void
+  onPortal: () => void
+}) {
+  const currentPlan = user?.plan ?? 'free'
+  const details = PLAN_DETAILS[currentPlan]
+
+  const upgradePlans = [
+    {
+      id: 'starter',
+      name: 'Starter',
+      price: '9€/mois',
+      limit: "100 emails/jour",
+      highlighted: false,
+      features: ['Tri IA GPT-4o-mini', 'Labels Gmail automatiques', 'Digest quotidien', '6 catégories'],
+      cta: 'Démarrer Starter',
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      price: '29€/mois',
+      limit: 'Toute la boîte mail',
+      highlighted: true,
+      features: ['Tout Starter', 'Catégories personnalisées', 'Export CSV', 'Stats avancées'],
+      cta: 'Démarrer Pro',
+    },
+    {
+      id: 'business',
+      name: 'Business',
+      price: 'Sur devis',
+      limit: 'Volume sur-mesure',
+      highlighted: false,
+      features: ['Tout Pro', 'Multi-comptes Gmail', 'Accès API', 'SLA 99.9%'],
+      cta: 'Contacter nos ventes',
+      isContact: true,
+    },
+  ]
+
+  // Plans proposés à l'upgrade : exclure le plan actuel et les plans inférieurs
+  const planOrder = ['free', 'starter', 'pro', 'business']
+  const currentIndex = planOrder.indexOf(currentPlan)
+  const availablePlans = upgradePlans.filter((p) => planOrder.indexOf(p.id) > currentIndex)
+
+  return (
+    <div className="space-y-6">
+      {/* Carte plan actuel */}
+      <div className={`rounded-xl border p-6 ${
+        currentPlan === 'business' ? 'border-purple-800/40 bg-purple-950/10' :
+        currentPlan === 'pro' ? 'border-blue-800/40 bg-blue-950/10' :
+        currentPlan === 'starter' ? 'border-emerald-800/40 bg-emerald-950/10' :
+        'border-[#2a2a2a] bg-[#141414]'
+      }`}>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${details.badge}`}>
+                {details.label}
+              </span>
+              {currentPlan !== 'free' && (
+                <span className="text-xs text-[#6a6a6a]">actif</span>
+              )}
+            </div>
+            <div className={`text-3xl font-bold mt-2 ${details.color}`}>{details.price}</div>
+            <div className="text-xs text-[#6a6a6a] mt-1">{details.limit}</div>
+          </div>
+          {currentPlan !== 'free' && (
+            <button
+              onClick={onPortal}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#3a3a3a] text-[#a0a0a0] hover:text-[#f5f5f5] hover:border-[#4a4a4a] text-sm transition-colors"
+            >
+              Gérer l'abonnement
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Features incluses */}
+        <div className="mt-4 pt-4 border-t border-[#2a2a2a]">
+          <p className="text-xs text-[#6a6a6a] mb-2 font-medium">Inclus dans votre plan</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {details.features.map((f) => (
+              <div key={f} className="flex items-center gap-2 text-sm text-[#a0a0a0]">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                {f}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Plans disponibles (upgrade) */}
+      {availablePlans.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-[#a0a0a0] mb-3">
+            {currentPlan === 'free' ? 'Choisir un plan' : 'Passer à un plan supérieur'}
+          </h4>
+          <div className={`grid gap-4 ${availablePlans.length === 1 ? 'grid-cols-1 max-w-sm' : availablePlans.length === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'}`}>
+            {availablePlans.map((plan) => (
+              <div
+                key={plan.id}
+                className={`relative p-5 rounded-xl border flex flex-col gap-4 ${
+                  plan.highlighted
+                    ? 'border-blue-600 bg-blue-950/20'
+                    : 'border-[#2a2a2a] bg-[#141414]'
+                }`}
+              >
+                {plan.highlighted && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                    Recommandé
+                  </span>
+                )}
+                <div>
+                  <div className="text-base font-bold text-[#f5f5f5]">{plan.name}</div>
+                  <div className="text-2xl font-bold text-[#f5f5f5] mt-1">{plan.price}</div>
+                  <div className="text-xs text-[#6a6a6a] mt-0.5">{plan.limit}</div>
+                </div>
+                <ul className="space-y-1.5 flex-1">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-xs text-[#a0a0a0]">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                {plan.isContact ? (
+                  <a
+                    href="mailto:sales@mailflow.ai?subject=Demande%20devis%20Business%20-%20MailFlow"
+                    className="block w-full text-center py-2.5 rounded-lg text-sm font-semibold bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5] transition-colors"
+                  >
+                    {plan.cta}
+                  </a>
+                ) : (
+                  <button
+                    onClick={() => onCheckout(plan.id)}
+                    className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                      plan.highlighted
+                        ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                        : 'bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5]'
+                    }`}
+                  >
+                    {plan.cta} — 14j gratuits
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Message si plan max */}
+      {currentPlan === 'business' && (
+        <div className="text-center py-6">
+          <p className="text-sm text-[#6a6a6a]">Vous êtes sur notre offre la plus complète.</p>
+          <p className="text-xs text-[#4a4a4a] mt-1">
+            Pour des besoins spécifiques,{' '}
+            <a href="mailto:sales@mailflow.ai" className="text-purple-400 hover:underline">
+              contactez notre équipe
+            </a>.
+          </p>
+        </div>
+      )}
+
+      {/* Note annulation */}
+      <p className="text-xs text-[#4a4a4a] text-center">
+        ✓ Annulation à tout moment &nbsp;·&nbsp; ✓ Sans engagement &nbsp;·&nbsp; ✓ Factures automatiques
+      </p>
     </div>
   )
 }
@@ -571,10 +841,10 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* Bannière plan gratuit */}
-        {user?.plan === 'free' && (
+        {/* Bannière plan */}
+        {user && (
           <div className="mb-6">
-            <FreePlanBanner />
+            <PlanBanner plan={user.plan} onUpgrade={() => handleCheckout('pro')} />
           </div>
         )}
 
@@ -713,83 +983,7 @@ function DashboardContent() {
         )}
 
         {activeTab === 'billing' && (
-          <div className="space-y-6">
-            {/* Plan actuel */}
-            <div className="rounded-xl border border-[#2a2a2a] bg-[#141414] p-6">
-              <h3 className="text-[#f5f5f5] font-semibold mb-4">Plan actuel</h3>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-2xl font-bold text-[#f5f5f5] capitalize">
-                    {user?.plan ?? 'free'}
-                  </div>
-                  <div className="text-sm text-[#6a6a6a] mt-1">
-                    {user?.plan === 'free'
-                      ? 'Fonctionnalités limitées'
-                      : 'Toutes les fonctionnalités incluses'}
-                  </div>
-                </div>
-                {user?.plan !== 'free' && (
-                  <button
-                    onClick={handlePortal}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#3a3a3a] text-[#a0a0a0] hover:text-[#f5f5f5] hover:border-[#4a4a4a] text-sm transition-colors"
-                  >
-                    Gérer mon abonnement
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Plans disponibles si free */}
-            {user?.plan === 'free' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Starter */}
-                <div className="p-5 rounded-xl border border-[#2a2a2a] bg-[#141414] flex flex-col">
-                  <div className="text-lg font-bold text-[#f5f5f5] mb-1">Starter</div>
-                  <div className="text-2xl font-bold text-[#f5f5f5] mb-1">9€<span className="text-base font-normal text-[#6a6a6a]">/mois</span></div>
-                  <div className="text-xs text-[#6a6a6a] mb-1">200 emails/jour</div>
-                  <div className="text-xs text-[#6a6a6a] mb-4">Nouveaux emails uniquement</div>
-                  <button
-                    onClick={() => handleCheckout('starter')}
-                    className="mt-auto w-full py-2 rounded-lg text-sm font-semibold bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5] transition-colors"
-                  >
-                    Essayer 14 jours gratuit
-                  </button>
-                </div>
-
-                {/* Pro */}
-                <div className="p-5 rounded-xl border border-blue-600 bg-blue-950/20 flex flex-col relative">
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">Populaire</span>
-                  </div>
-                  <div className="text-lg font-bold text-[#f5f5f5] mb-1">Pro</div>
-                  <div className="text-2xl font-bold text-[#f5f5f5] mb-1">29€<span className="text-base font-normal text-[#6a6a6a]">/mois</span></div>
-                  <div className="text-xs text-[#6a6a6a] mb-1">Emails illimités</div>
-                  <div className="text-xs text-blue-400 font-medium mb-4">✨ Tri de toute ta boîte (50k emails)</div>
-                  <button
-                    onClick={() => handleCheckout('pro')}
-                    className="mt-auto w-full py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-                  >
-                    Essayer 14 jours gratuit
-                  </button>
-                </div>
-
-                {/* Business */}
-                <div className="p-5 rounded-xl border border-[#2a2a2a] bg-[#141414] flex flex-col">
-                  <div className="text-lg font-bold text-[#f5f5f5] mb-1">Business</div>
-                  <div className="text-2xl font-bold text-[#f5f5f5] mb-1">Sur devis</div>
-                  <div className="text-xs text-[#6a6a6a] mb-1">Volume sur mesure</div>
-                  <div className="text-xs text-purple-400 font-medium mb-4">Multi-comptes · API · SLA</div>
-                  <a
-                    href="mailto:hello@mailflow.ai?subject=MailFlow Business — Demande de devis"
-                    className="mt-auto w-full py-2 rounded-lg text-sm font-semibold border border-purple-700/50 text-purple-300 hover:bg-purple-950/30 transition-colors text-center"
-                  >
-                    Nous contacter →
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
+          <BillingTab user={user} onCheckout={handleCheckout} onPortal={handlePortal} />
         )}
 
         {activeTab === 'settings' && (
