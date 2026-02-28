@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -27,6 +27,9 @@ import {
   Inbox,
   Users,
   Filter,
+  Send,
+  Bot,
+  Sparkles,
 } from 'lucide-react'
 import { EmailList } from '@/components/EmailList'
 import { StatsCard, StatsGrid } from '@/components/StatsCard'
@@ -762,29 +765,132 @@ function ProToolsTab({ emails, stats, user }: {
   const [relabelResult, setRelabelResult] = useState<{ labeled: number; errors: number } | null>(null)
   const [exportDone, setExportDone] = useState(false)
 
-  // --- Agent IA rules ---
-  const [customRules, setCustomRules] = useState(user?.settings?.customRules ?? '')
-  const [savingRules, setSavingRules] = useState(false)
-  const [savedRules, setSavedRules] = useState(false)
+  // --- Sort job state ---
+  interface SortJob {
+    status: 'idle' | 'running' | 'completed' | 'error'
+    startedAt: string | null
+    completedAt: string | null
+    totalEmails: number
+    processed: number
+    labeled: number
+    errors: number
+    currentBatch: number
+    totalBatches: number
+    lastError: string | null
+  }
+  const [sortJob, setSortJob] = useState<SortJob | null>(null)
+  const [sortPolling, setSortPolling] = useState(false)
 
-  const handleSaveRules = async () => {
-    setSavingRules(true)
-    setSavedRules(false)
+  // Polling de la progression du tri
+  useEffect(() => {
+    if (!sortPolling) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/emails/sort-all')
+        const data = await res.json()
+        if (data.job) {
+          setSortJob(data.job)
+          if (data.job.status === 'completed' || data.job.status === 'error' || data.job.status === 'idle') {
+            setSortPolling(false)
+          }
+        }
+      } catch { /* silencieux */ }
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [sortPolling])
+
+  // Charger le statut initial au mount
+  useEffect(() => {
+    if (!isPro) return
+    fetch('/api/emails/sort-all')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.job) {
+          setSortJob(data.job)
+          if (data.job.status === 'running') setSortPolling(true)
+        }
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleStartSort = async () => {
     try {
-      const res = await fetch('/api/me', {
+      const res = await fetch('/api/emails/sort-all', { method: 'POST' })
+      if (res.ok) {
+        setSortPolling(true)
+        setSortJob((prev) => prev ? { ...prev, status: 'running', processed: 0, labeled: 0, errors: 0 } : null)
+      }
+    } catch { /* silencieux */ }
+  }
+
+  // --- Agent IA Chat ---
+  interface ChatMessage {
+    role: 'user' | 'assistant'
+    content: string
+  }
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [extractedRules, setExtractedRules] = useState<string | null>(null)
+  const [rulesApplied, setRulesApplied] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll au dernier message
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  // Envoyer le premier message d'accueil au mount
+  useEffect(() => {
+    if (!isPro || chatMessages.length > 0) return
+    handleSendChat('Bonjour, analyse ma boîte mail et propose-moi des règles de tri personnalisées.')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleSendChat = async (overrideMsg?: string) => {
+    const msg = overrideMsg ?? chatInput.trim()
+    if (!msg || chatLoading) return
+    if (!overrideMsg) setChatInput('')
+
+    const newMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: msg }]
+    setChatMessages(newMessages)
+    setChatLoading(true)
+
+    try {
+      const res = await fetch('/api/agent/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages }),
+      })
+      const data = await res.json()
+      if (data.reply) {
+        setChatMessages([...newMessages, { role: 'assistant', content: data.reply }])
+      }
+      if (data.extractedRules) {
+        setExtractedRules(data.extractedRules)
+        setRulesApplied(false)
+      }
+    } catch {
+      setChatMessages([...newMessages, { role: 'assistant', content: 'Désolé, une erreur est survenue. Réessaie !' }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  const handleApplyRules = async () => {
+    if (!extractedRules) return
+    try {
+      const res = await fetch('/api/agent/chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customRules: customRules || null }),
+        body: JSON.stringify({ rules: extractedRules }),
       })
       if (res.ok) {
-        setSavedRules(true)
-        setTimeout(() => setSavedRules(false), 3000)
+        setRulesApplied(true)
+        setTimeout(() => setRulesApplied(false), 5000)
       }
-    } catch (err) {
-      console.error('[ProTools] Save rules error:', err)
-    } finally {
-      setSavingRules(false)
-    }
+    } catch { /* silencieux */ }
   }
 
   // --- Export CSV ---
@@ -885,73 +991,104 @@ function ProToolsTab({ emails, stats, user }: {
         )}
       </div>
 
-      {/* --- Agent IA — Règles personnalisées --- */}
-      <div className="rounded-xl border border-violet-800/40 bg-violet-950/10 p-6">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-violet-950/60 border border-violet-800/40 flex items-center justify-center flex-shrink-0">
-              <Zap className="w-4 h-4 text-violet-400" />
-            </div>
-            <div>
-              <h3 className="text-[#f5f5f5] font-semibold text-sm">Mon Agent IA</h3>
-              <p className="text-xs text-[#6a6a6a]">Dites à l&apos;IA comment trier <em>votre</em> boîte en langage naturel</p>
-            </div>
+      {/* --- Agent IA — Chat conversationnel --- */}
+      <div className="relative rounded-xl border border-violet-800/40 bg-violet-950/10 p-6">
+        {!isPro && <LockedOverlay />}
+
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-violet-950/60 border border-violet-800/40 flex items-center justify-center flex-shrink-0">
+            <Bot className="w-4 h-4 text-violet-400" />
           </div>
-          {savedRules && (
-            <span className="text-xs text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Sauvegardé
-            </span>
+          <div>
+            <h3 className="text-[#f5f5f5] font-semibold text-sm">Mon Agent IA</h3>
+            <p className="text-xs text-[#6a6a6a]">Conversez pour personnaliser votre tri</p>
+          </div>
+        </div>
+
+        {/* Chat messages */}
+        <div className="h-64 overflow-y-auto rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 mb-3 space-y-3 scroll-smooth">
+          {chatMessages.length === 0 && !chatLoading && (
+            <p className="text-xs text-[#4a4a4a] text-center mt-20">L&apos;agent va analyser votre boîte mail…</p>
           )}
-        </div>
-
-        {/* Suggestions rapides */}
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {[
-            { label: '🚨 Boss → Urgent', rule: 'Les emails de mon manager direct → toujours Urgent' },
-            { label: '📰 Substack → News', rule: 'Toute newsletter Substack → Newsletters' },
-            { label: '💳 Stripe → Factures', rule: 'Emails de Stripe, PayPal ou factures → Factures' },
-            { label: '👥 Équipe → Business', rule: 'Emails de collègues (même domaine) → Business, priorité haute' },
-          ].map(({ label, rule }) => (
-            <button
-              key={label}
-              onClick={() => setCustomRules((prev) => (prev ? prev + '\n' + rule : rule))}
-              disabled={!isPro}
-              className="text-xs px-2.5 py-1 rounded-full bg-[#0a0a0a] border border-[#2a2a2a] text-[#8a8a8a] hover:border-violet-700 hover:text-violet-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {label}
-            </button>
+          {chatMessages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
+                  m.role === 'user'
+                    ? 'bg-violet-700/60 text-[#f5f5f5]'
+                    : 'bg-[#1a1a2e] border border-violet-800/30 text-[#d0d0d0]'
+                }`}
+              >
+                {m.role === 'assistant' && (
+                  <span className="flex items-center gap-1 text-violet-400 text-xs font-semibold mb-1">
+                    <Bot className="w-3 h-3" /> Agent IA
+                  </span>
+                )}
+                <p className="whitespace-pre-wrap">{m.content}</p>
+              </div>
+            </div>
           ))}
+          {chatLoading && (
+            <div className="flex justify-start">
+              <div className="bg-[#1a1a2e] border border-violet-800/30 rounded-xl px-3 py-2 text-sm text-[#8a8a8a]">
+                <span className="flex items-center gap-2">
+                  <Bot className="w-3 h-3 text-violet-400 animate-pulse" />
+                  <span className="animate-pulse">Analyse en cours…</span>
+                </span>
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
         </div>
 
-        <textarea
-          value={customRules ?? ''}
-          onChange={(e) => setCustomRules(e.target.value)}
-          disabled={!isPro}
-          rows={4}
-          maxLength={4000}
-          placeholder={!isPro
-            ? 'Disponible à partir du plan Pro…'
-            : 'Ex : Les emails de support@stripe.com → Factures\nMon boss (jean@acme.com) → toujours Urgent\nIgnorer les newsletters LinkedIn'}
-          className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-sm text-[#f5f5f5] placeholder-[#3a3a3a] focus:outline-none focus:border-violet-600 resize-none font-mono leading-relaxed disabled:opacity-40 disabled:cursor-not-allowed"
-        />
-
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-[#4a4a4a]">{(customRules ?? '').length} / 4000</span>
-          <div className="flex items-center gap-3">
-            {(customRules ?? '').length > 0 && (
-              <button onClick={() => setCustomRules('')} className="text-xs text-[#6a6a6a] hover:text-red-400 transition-colors">
-                Effacer
-              </button>
-            )}
-            <button
-              onClick={handleSaveRules}
-              disabled={savingRules || !isPro}
-              className="px-3 py-1.5 bg-violet-700 hover:bg-violet-600 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors"
-            >
-              {savingRules ? 'Sauvegarde…' : 'Appliquer'}
-            </button>
+        {/* Règles extraites */}
+        {extractedRules && (
+          <div className="mb-3 rounded-lg bg-violet-950/30 border border-violet-700/40 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-violet-300 flex items-center gap-1">
+                <Zap className="w-3 h-3" /> Règles suggérées
+              </span>
+              {rulesApplied ? (
+                <span className="text-xs text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Appliquées !
+                </span>
+              ) : (
+                <button
+                  onClick={handleApplyRules}
+                  className="text-xs px-2.5 py-1 bg-violet-700 hover:bg-violet-600 text-white rounded-lg transition-colors font-semibold"
+                >
+                  Appliquer ces règles
+                </button>
+              )}
+            </div>
+            <pre className="text-xs text-[#c0c0c0] bg-[#0a0a0a] rounded-lg p-2 whitespace-pre-wrap font-mono leading-relaxed border border-[#2a2a2a]">
+              {extractedRules}
+            </pre>
           </div>
-        </div>
+        )}
+
+        {/* Input bar */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); handleSendChat() }}
+          className="flex items-center gap-2"
+        >
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            disabled={chatLoading || !isPro}
+            placeholder="Ex : Mets les emails LinkedIn en Newsletter…"
+            className="flex-1 px-3 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-sm text-[#f5f5f5] placeholder-[#3a3a3a] focus:outline-none focus:border-violet-600 disabled:opacity-40"
+          />
+          <button
+            type="submit"
+            disabled={chatLoading || !chatInput.trim() || !isPro}
+            className="p-2 rounded-lg bg-violet-700 hover:bg-violet-600 disabled:opacity-40 text-white transition-colors"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
       </div>
 
       {/* --- Tri boîte mail entière --- */}
@@ -964,35 +1101,159 @@ function ProToolsTab({ emails, stats, user }: {
           <div className="flex-1">
             <h3 className="text-[#f5f5f5] font-semibold mb-1">Tri de toute la boîte mail</h3>
             <p className="text-sm text-[#6a6a6a] mb-4">
-              Traite l&apos;intégralité de vos emails existants — jusqu&apos;à 50 000 messages. Les emails sont classifiés par IA et labellisés dans Gmail.
+              Classifie et labellise jusqu&apos;à 50 000 emails — l&apos;IA analyse chaque message et applique les labels Gmail automatiquement.
             </p>
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 text-center">
-                <div className="text-2xl font-bold text-[#f5f5f5]">{(stats?.totalProcessed ?? 0).toLocaleString()}</div>
-                <div className="text-xs text-[#6a6a6a] mt-0.5">Emails classifiés</div>
+
+            {/* --- Statut du tri --- */}
+            {sortJob?.status === 'running' ? (
+              <div className="space-y-4">
+                {/* Barre de progression */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-[#a0a0a0]">
+                      Traitement en cours… Batch {sortJob.currentBatch}/{sortJob.totalBatches}
+                    </span>
+                    <span className="text-xs font-mono text-blue-400">
+                      {sortJob.processed}/{sortJob.totalEmails}
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-[#2a2a2a] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${sortJob.totalEmails > 0 ? Math.round((sortJob.processed / sortJob.totalEmails) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Stats temps réel */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-2.5 text-center">
+                    <div className="text-lg font-bold text-[#f5f5f5]">{sortJob.totalEmails.toLocaleString()}</div>
+                    <div className="text-[10px] text-[#6a6a6a]">À traiter</div>
+                  </div>
+                  <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-2.5 text-center">
+                    <div className="text-lg font-bold text-blue-400">{sortJob.processed.toLocaleString()}</div>
+                    <div className="text-[10px] text-[#6a6a6a]">Classifiés</div>
+                  </div>
+                  <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-2.5 text-center">
+                    <div className="text-lg font-bold text-emerald-400">{sortJob.labeled.toLocaleString()}</div>
+                    <div className="text-[10px] text-[#6a6a6a]">Labellisés</div>
+                  </div>
+                  <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-2.5 text-center">
+                    <div className="text-lg font-bold text-red-400">{sortJob.errors}</div>
+                    <div className="text-[10px] text-[#6a6a6a]">Erreurs</div>
+                  </div>
+                </div>
+
+                {/* Indicateur animé */}
+                <div className="flex items-center gap-2 text-xs text-blue-400">
+                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                  Tri en cours — vous pouvez quitter cette page, le tri continuera en arrière-plan
+                </div>
               </div>
-              <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 text-center">
-                <div className="text-2xl font-bold text-[#f5f5f5]">{labeledRate}%</div>
-                <div className="text-xs text-[#6a6a6a] mt-0.5">Labellisés Gmail</div>
+            ) : sortJob?.status === 'completed' ? (
+              <div className="space-y-4">
+                {/* Résultat final */}
+                <div className="rounded-lg bg-emerald-950/20 border border-emerald-800/30 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span className="text-sm font-semibold text-emerald-400">Tri terminé !</span>
+                    {sortJob.completedAt && (
+                      <span className="text-xs text-[#6a6a6a] ml-auto">
+                        {new Date(sortJob.completedAt).toLocaleString('fr-FR')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-[#f5f5f5]">{sortJob.processed.toLocaleString()}</div>
+                      <div className="text-[10px] text-[#6a6a6a]">Emails classifiés</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-emerald-400">{sortJob.labeled.toLocaleString()}</div>
+                      <div className="text-[10px] text-[#6a6a6a]">Labels appliqués</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-purple-400">
+                        ~{Math.round(sortJob.processed * 0.3)}min
+                      </div>
+                      <div className="text-[10px] text-[#6a6a6a]">Temps économisé</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bouton relancer */}
+                <button
+                  onClick={handleStartSort}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  <Inbox className="w-4 h-4" />
+                  Relancer un tri complet
+                </button>
               </div>
-              <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 text-center">
-                <div className="text-2xl font-bold text-emerald-400">{highConfidence}</div>
-                <div className="text-xs text-[#6a6a6a] mt-0.5">Confiance &gt; 90%</div>
+            ) : sortJob?.status === 'error' ? (
+              <div className="space-y-3">
+                <div className="rounded-lg bg-red-950/20 border border-red-800/30 p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-semibold text-red-400">Erreur lors du tri</span>
+                  </div>
+                  <p className="text-xs text-[#6a6a6a]">{sortJob.lastError ?? 'Une erreur inattendue est survenue'}</p>
+                  {sortJob.processed > 0 && (
+                    <p className="text-xs text-[#a0a0a0] mt-2">
+                      {sortJob.processed} emails ont quand même été traités avant l&apos;erreur.
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={handleStartSort}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  <Inbox className="w-4 h-4" />
+                  Réessayer
+                </button>
               </div>
-            </div>
-            <button
-              onClick={handleRelabel}
-              disabled={relabeling || !isPro}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
-            >
-              <Tag className={`w-4 h-4 ${relabeling ? 'animate-spin' : ''}`} />
-              {relabeling ? 'Application des labels...' : 'Appliquer les labels Gmail'}
-            </button>
-            {relabelResult && (
-              <p className="mt-2 text-sm text-emerald-400">
-                ✓ {relabelResult.labeled} email(s) labellisé(s)
-                {relabelResult.errors > 0 && ` — ${relabelResult.errors} erreur(s)`}
-              </p>
+            ) : (
+              /* État idle — bouton lancer */
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 text-center">
+                    <div className="text-2xl font-bold text-[#f5f5f5]">{(stats?.totalProcessed ?? 0).toLocaleString()}</div>
+                    <div className="text-xs text-[#6a6a6a] mt-0.5">Déjà classifiés</div>
+                  </div>
+                  <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 text-center">
+                    <div className="text-2xl font-bold text-[#f5f5f5]">{labeledRate}%</div>
+                    <div className="text-xs text-[#6a6a6a] mt-0.5">Labellisés</div>
+                  </div>
+                  <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 text-center">
+                    <div className="text-2xl font-bold text-emerald-400">{highConfidence}</div>
+                    <div className="text-xs text-[#6a6a6a] mt-0.5">Confiance &gt; 90%</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleStartSort}
+                    disabled={!isPro}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+                  >
+                    <Inbox className="w-4 h-4" />
+                    Lancer le tri complet
+                  </button>
+                  <button
+                    onClick={handleRelabel}
+                    disabled={relabeling || !isPro}
+                    className="flex items-center gap-2 px-4 py-2.5 border border-[#2a2a2a] hover:border-blue-700 text-[#a0a0a0] hover:text-blue-400 text-sm rounded-lg transition-colors"
+                  >
+                    <Tag className={`w-4 h-4 ${relabeling ? 'animate-spin' : ''}`} />
+                    {relabeling ? 'Labels en cours...' : 'Re-labelliser'}
+                  </button>
+                </div>
+                {relabelResult && (
+                  <p className="text-sm text-emerald-400">
+                    ✓ {relabelResult.labeled} email(s) labellisé(s)
+                    {relabelResult.errors > 0 && ` — ${relabelResult.errors} erreur(s)`}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
