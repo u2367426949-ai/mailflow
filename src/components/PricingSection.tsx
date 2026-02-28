@@ -135,21 +135,30 @@ export function PricingSection() {
 
                 <div className="mb-6">
                   <h3 className="text-lg font-bold text-[#f5f5f5] mb-1">{plan.name}</h3>
-                  <div className="flex items-end gap-1 mb-1">
-                    <span className="text-4xl font-bold text-[#f5f5f5]">{displayPrice}€</span>
-                    <span className="text-[#a0a0a0] mb-1">/mois</span>
-                  </div>
-                  {annual ? (
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-emerald-400 font-medium">
-                        Facturé {annualTotal}€/an
-                      </p>
-                      <p className="text-xs text-[#6a6a6a] line-through">
-                        vs {plan.monthlyPrice * 12}€/an en mensuel
-                      </p>
+                  {plan.id === 'business' ? (
+                    <div className="mb-1">
+                      <span className="text-4xl font-bold text-[#f5f5f5]">Sur devis</span>
+                      <p className="text-sm text-[#6a6a6a] mt-1">{plan.emails}</p>
                     </div>
                   ) : (
-                    <p className="text-sm text-[#6a6a6a]">{plan.emails}</p>
+                    <>
+                      <div className="flex items-end gap-1 mb-1">
+                        <span className="text-4xl font-bold text-[#f5f5f5]">{displayPrice}€</span>
+                        <span className="text-[#a0a0a0] mb-1">/mois</span>
+                      </div>
+                      {annual ? (
+                        <div className="space-y-0.5">
+                          <p className="text-xs text-emerald-400 font-medium">
+                            Facturé {annualTotal}€/an
+                          </p>
+                          <p className="text-xs text-[#6a6a6a] line-through">
+                            vs {plan.monthlyPrice * 12}€/an en mensuel
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#6a6a6a]">{plan.emails}</p>
+                      )}
+                    </>
                   )}
                 </div>
 
