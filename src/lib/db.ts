@@ -67,7 +67,7 @@ function getDbClient(): PrismaClient {
 
 export const db = new Proxy({} as PrismaClient, {
   get(_target, prop) {
-    return (getDbClient() as Record<string | symbol, unknown>)[prop]
+    return (getDbClient() as unknown as Record<string | symbol, unknown>)[prop]
   },
 })
 
