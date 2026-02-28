@@ -147,7 +147,7 @@ function useDashboardData() {
     )
   }
 
-  return { emails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback }
+  return { emails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser }
 }
 
 // ----------------------------------------------------------
@@ -473,15 +473,17 @@ function SettingsTab({ user }: { user: UserSession | null }) {
 // Page Dashboard principale
 // ----------------------------------------------------------
 function DashboardContent() {
-  const { emails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback } = useDashboardData()
+  const { emails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser } = useDashboardData()
   const searchParams = useSearchParams()
   const tabFromUrl = searchParams.get('tab')
+  const checkoutStatus = searchParams.get('checkout')
 
   const validTabs = ['emails', 'stats', 'activity', 'billing', 'settings'] as const
   type TabId = typeof validTabs[number]
 
   const initialTab: TabId = validTabs.includes(tabFromUrl as TabId) ? (tabFromUrl as TabId) : 'emails'
   const [activeTab, setActiveTab] = useState<TabId>(initialTab)
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false)
 
   // Sync tab with URL changes
   useEffect(() => {
@@ -489,6 +491,24 @@ function DashboardContent() {
       setActiveTab(tabFromUrl as TabId)
     }
   }, [tabFromUrl])
+
+  // Gérer le retour depuis Stripe Checkout
+  useEffect(() => {
+    if (checkoutStatus === 'success') {
+      setActiveTab('billing')
+      setCheckoutSuccess(true)
+      // Re-fetch user pour obtenir le nouveau plan
+      fetchUser()
+      // Nettoyer l'URL sans recharger la page
+      const url = new URL(window.location.href)
+      url.searchParams.delete('checkout')
+      url.searchParams.delete('session_id')
+      window.history.replaceState({}, '', url.toString())
+      // Masquer la bannière après 6s
+      setTimeout(() => setCheckoutSuccess(false), 6000)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const tabs = [
     { id: 'emails' as const, label: 'Emails', icon: Mail },
@@ -536,6 +556,17 @@ function DashboardContent() {
             })}
           </p>
         </div>
+
+        {/* Bannière succès paiement */}
+        {checkoutSuccess && (
+          <div className="mb-6 flex items-start gap-3 p-4 rounded-xl border border-green-700/40 bg-green-950/30 text-green-300">
+            <span className="text-xl">🎉</span>
+            <div>
+              <p className="font-semibold text-green-200">Abonnement activé avec succès !</p>
+              <p className="text-sm text-green-400 mt-0.5">Votre nouveau plan est maintenant actif. Profitez de toutes les fonctionnalités MailFlow.</p>
+            </div>
+          </div>
+        )}
 
         {/* Bannière plan gratuit */}
         {user?.plan === 'free' && (
