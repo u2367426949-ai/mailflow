@@ -104,6 +104,14 @@ function useDashboardData() {
     load()
   }, [load])
 
+  // Auto-refresh toutes les 30 secondes
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      await Promise.all([fetchEmails(), fetchStats()])
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [fetchEmails, fetchStats])
+
   const sync = async () => {
     setSyncing(true)
     try {
