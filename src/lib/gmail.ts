@@ -355,33 +355,35 @@ export async function applyLabelToEmail(
 // ----------------------------------------------------------
 
 // Mapping catégorie → couleur Gmail
+// Couleurs officielles Gmail API (palette autorisée)
+// Ref: https://developers.google.com/gmail/api/reference/rest/v1/users.labels
 const CATEGORY_LABEL_CONFIG: Record<
   string,
   { name: string; color: { backgroundColor: string; textColor: string } }
 > = {
   urgent: {
-    name: 'MailFlow/🔴 Urgent',
-    color: { backgroundColor: '#dc2626', textColor: '#ffffff' },
+    name: 'MailFlow/Urgent',
+    color: { backgroundColor: '#fb4c2f', textColor: '#ffffff' }, // Rouge Gmail
   },
   personal: {
-    name: 'MailFlow/👤 Personnel',
-    color: { backgroundColor: '#8b5cf6', textColor: '#ffffff' },
+    name: 'MailFlow/Personnel',
+    color: { backgroundColor: '#a479e2', textColor: '#ffffff' }, // Violet Gmail
   },
   business: {
-    name: 'MailFlow/💼 Business',
-    color: { backgroundColor: '#3b82f6', textColor: '#ffffff' },
+    name: 'MailFlow/Business',
+    color: { backgroundColor: '#4a86e8', textColor: '#ffffff' }, // Bleu Gmail
   },
   invoices: {
-    name: 'MailFlow/📄 Factures',
-    color: { backgroundColor: '#f59e0b', textColor: '#000000' },
+    name: 'MailFlow/Factures',
+    color: { backgroundColor: '#ffad47', textColor: '#ffffff' }, // Orange Gmail
   },
   newsletters: {
-    name: 'MailFlow/📰 Newsletters',
-    color: { backgroundColor: '#10b981', textColor: '#ffffff' },
+    name: 'MailFlow/Newsletters',
+    color: { backgroundColor: '#16a766', textColor: '#ffffff' }, // Vert Gmail
   },
   spam: {
-    name: 'MailFlow/🗑️ Spam',
-    color: { backgroundColor: '#6a6a6a', textColor: '#ffffff' },
+    name: 'MailFlow/Spam',
+    color: { backgroundColor: '#8a8a8a', textColor: '#ffffff' }, // Gris Gmail
   },
 }
 
