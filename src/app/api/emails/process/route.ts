@@ -132,9 +132,26 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Vérification auth cron
-  if (!isCronAuthorized(request)) {
+  // Vérification auth — cron OU utilisateur connecté
+  const sessionToken = request.cookies.get('mailflow_session')?.value
+  const isCron = isCronAuthorized(request)
+  const isUser = !!sessionToken
+
+  if (!isCron && !isUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Si appel utilisateur, extraire son ID depuis le JWT
+  let userIdFilter: string | null = null
+  if (isUser && !isCron) {
+    try {
+      const { jwtVerify } = await import('jose')
+      const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
+      const { payload } = await jwtVerify(sessionToken!, JWT_SECRET)
+      userIdFilter = payload.sub ?? null
+    } catch {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
+    }
   }
 
   const startTime = Date.now()
@@ -150,6 +167,7 @@ export async function POST(request: NextRequest) {
     // Récupérer les utilisateurs actifs (plan payant + tokens valides)
     const users = await db.user.findMany({
       where: {
+        ...(userIdFilter ? { id: userIdFilter } : {}),
         plan: { not: 'free' },
         googleRefreshToken: { not: null },
         isOnboarded: true,
