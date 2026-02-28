@@ -54,6 +54,7 @@ function useDashboardData() {
   const [user, setUser] = useState<UserSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const fetchEmails = useCallback(async () => {
@@ -97,6 +98,7 @@ function useDashboardData() {
   const load = useCallback(async () => {
     setLoading(true)
     await Promise.all([fetchEmails(), fetchStats(), fetchUser()])
+    setLastSyncedAt(new Date())
     setLoading(false)
   }, [fetchEmails, fetchStats, fetchUser])
 
@@ -108,6 +110,7 @@ function useDashboardData() {
   useEffect(() => {
     const interval = setInterval(async () => {
       await Promise.all([fetchEmails(), fetchStats()])
+      setLastSyncedAt(new Date())
     }, 30_000)
     return () => clearInterval(interval)
   }, [fetchEmails, fetchStats])
@@ -119,6 +122,7 @@ function useDashboardData() {
       if (res.ok) {
         await fetchEmails()
         await fetchStats()
+        setLastSyncedAt(new Date())
       }
     } catch (err) {
       setError('Erreur lors de la synchronisation')
@@ -143,7 +147,7 @@ function useDashboardData() {
     )
   }
 
-  return { emails, stats, user, loading, syncing, error, sync, handleFeedback }
+  return { emails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback }
 }
 
 // ----------------------------------------------------------
@@ -152,12 +156,33 @@ function useDashboardData() {
 function DashboardHeader({
   user,
   syncing,
+  lastSyncedAt,
   onSync,
 }: {
   user: UserSession | null
   syncing: boolean
+  lastSyncedAt: Date | null
   onSync: () => void
 }) {
+  const syncAgo = lastSyncedAt
+    ? Math.round((Date.now() - lastSyncedAt.getTime()) / 1000)
+    : null
+
+  const getSyncLabel = () => {
+    if (syncing) return 'Sync...'
+    if (syncAgo === null) return 'Synchroniser'
+    if (syncAgo < 10) return 'À jour'
+    if (syncAgo < 60) return `il y a ${syncAgo}s`
+    return `il y a ${Math.round(syncAgo / 60)}min`
+  }
+
+  // Pastille : verte si < 60s, orange si < 5min, grise sinon
+  const dotColor =
+    syncAgo !== null && syncAgo < 60
+      ? 'bg-emerald-400'
+      : syncAgo !== null && syncAgo < 300
+      ? 'bg-amber-400'
+      : 'bg-[#6a6a6a]'
   return (
     <header className="sticky top-0 z-40 border-b border-[#2a2a2a] bg-[#0a0a0a]/90 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -189,14 +214,17 @@ function DashboardHeader({
               </span>
             )}
 
-            {/* Sync button */}
+            {/* Sync button with status indicator */}
             <button
               onClick={onSync}
               disabled={syncing}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#3a3a3a] text-[#a0a0a0] hover:text-[#f5f5f5] hover:border-[#4a4a4a] text-xs font-medium transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{syncing ? 'Sync...' : 'Synchroniser'}</span>
+              <span className="relative">
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${syncing ? 'bg-blue-400 animate-pulse' : dotColor}`} />
+              </span>
+              <span className="hidden sm:inline">{getSyncLabel()}</span>
             </button>
 
             {/* User menu */}
@@ -445,7 +473,7 @@ function SettingsTab({ user }: { user: UserSession | null }) {
 // Page Dashboard principale
 // ----------------------------------------------------------
 function DashboardContent() {
-  const { emails, stats, user, loading, syncing, error, sync, handleFeedback } = useDashboardData()
+  const { emails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback } = useDashboardData()
   const searchParams = useSearchParams()
   const tabFromUrl = searchParams.get('tab')
 
@@ -492,7 +520,7 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
-      <DashboardHeader user={user} syncing={syncing} onSync={sync} />
+      <DashboardHeader user={user} syncing={syncing} lastSyncedAt={lastSyncedAt} onSync={sync} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {/* Greeting */}
