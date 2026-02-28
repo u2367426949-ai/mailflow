@@ -21,6 +21,7 @@ const updateProfileSchema = z.object({
   digestTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format HH:MM attendu').optional(),
   timezone: z.string().max(50).optional(),
   isOnboarded: z.boolean().optional(),
+  customRules: z.string().max(4000).optional().nullable(),
   enabledCategories: z.array(z.string().min(1).max(50)).max(20).optional(),
   settings: z.record(z.unknown()).optional(),
 }).strict()
@@ -108,7 +109,16 @@ export async function PUT(request: NextRequest) {
         ...(body.digestTime !== undefined && { digestTime: body.digestTime }),
         ...(body.timezone !== undefined && { timezone: body.timezone }),
         ...(body.isOnboarded !== undefined && { isOnboarded: body.isOnboarded }),
-        ...(body.settings !== undefined && { settings: body.settings as Prisma.InputJsonValue }),
+        // customRules stocké dans le JSON settings pour éviter une migration
+        ...(body.customRules !== undefined && {
+          settings: {
+            ...(body.settings as Record<string, unknown> ?? {}),
+            customRules: body.customRules ?? null,
+          } as Prisma.InputJsonValue,
+        }),
+        ...(body.settings !== undefined && body.customRules === undefined && {
+          settings: body.settings as Prisma.InputJsonValue,
+        }),
       },
       select: {
         id: true,

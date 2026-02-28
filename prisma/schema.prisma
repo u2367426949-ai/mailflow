@@ -44,6 +44,7 @@ model User {
   timezone             String    @default("Europe/Paris")
   lastSyncAt           DateTime? @map("last_sync_at")
   isOnboarded          Boolean   @default(false) @map("is_onboarded")
+  customRules          String?   @map("custom_rules") @db.Text // Règles IA personnalisées (langage naturel)
   settings             Json      @default("{}") @db.JsonB
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")

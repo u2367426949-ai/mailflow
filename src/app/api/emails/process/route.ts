@@ -14,14 +14,12 @@ import type { Plan } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
-// Limite d'emails par exécution (toutes les 5min) par utilisateur selon le plan
-// Starter : 200/jour ÷ ~288 exécutions/jour ≈ 10/exec (marge de sécurité)
-// Pro / Business : illimité en pratique (999 = plafond de sécurité)
+// Limite d'emails par exécution par utilisateur selon le plan
 const PLAN_EMAIL_LIMITS: Record<Plan, number> = {
   free: 0,
-  starter: 10,
-  pro: 999,
-  business: 999,
+  starter: 25,
+  pro: 50,
+  business: 100,
 }
 
 // Taille des batches pour le traitement parallèle
@@ -56,7 +54,8 @@ interface EmailProcessResult {
 
 async function processEmail(
   userId: string,
-  gmailEmail: Awaited<ReturnType<typeof fetchNewEmails>>[number]
+  gmailEmail: Awaited<ReturnType<typeof fetchNewEmails>>[number],
+  customRules?: string | null
 ): Promise<EmailProcessResult> {
   try {
     // Vérifier si l'email est déjà en DB
@@ -67,13 +66,13 @@ async function processEmail(
 
     if (existing) return { success: true, skipped: true }
 
-    // Classifier avec OpenAI
+    // Classifier avec OpenAI (+ règles personnalisées si présentes)
     const classification = await classifyEmail({
       from: gmailEmail.from,
       to: gmailEmail.to,
       subject: gmailEmail.subject,
       snippet: gmailEmail.snippet,
-    })
+    }, customRules)
 
     // Sauvegarder l'email en DB
     const savedEmail = await db.email.create({
@@ -186,6 +185,7 @@ export async function POST(request: NextRequest) {
         email: true,
         plan: true,
         lastSyncAt: true,
+        settings: true,
       },
     })
 
@@ -200,6 +200,12 @@ export async function POST(request: NextRequest) {
       try {
         const limit = PLAN_EMAIL_LIMITS[user.plan]
         if (limit === 0) continue
+
+        // Récupérer les règles personnalisées de l'utilisateur (stockées dans settings JSON)
+        const userSettings = user.settings as Record<string, unknown> | null
+        const customRules = typeof userSettings?.customRules === 'string'
+          ? userSettings.customRules
+          : null
 
         // Récupérer les nouveaux emails depuis la dernière sync
         const newEmails = await fetchNewEmails(
@@ -217,7 +223,7 @@ export async function POST(request: NextRequest) {
           const batch = newEmails.slice(i, i + BATCH_SIZE)
 
           const batchResults = await Promise.allSettled(
-            batch.map((gmailEmail) => processEmail(user.id, gmailEmail))
+            batch.map((gmailEmail) => processEmail(user.id, gmailEmail, customRules))
           )
 
           for (const result of batchResults) {

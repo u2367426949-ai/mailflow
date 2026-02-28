@@ -52,8 +52,12 @@ const SYSTEM_PROMPT = `Tu es un classificateur d'emails professionnel. Tu dois c
 // ----------------------------------------------------------
 // Construire le prompt utilisateur
 // ----------------------------------------------------------
-function buildUserPrompt(email: EmailToClassify): string {
+function buildUserPrompt(email: EmailToClassify, customRules?: string | null): string {
   const toStr = email.to.slice(0, 3).join(', ')
+
+  const customRulesBlock = customRules?.trim()
+    ? `\nRègles personnalisées de l'utilisateur (prioritaires sur les règles générales) :\n${customRules.trim()}\n`
+    : ''
 
   return `Catégories disponibles :
 - urgent : nécessite une action rapide (délai < 24h), demande critique, problème bloquant, mots-clés 'urgent', 'asap', 'important', 'impératif', 'immédiatement'
@@ -68,7 +72,7 @@ Règles de priorité :
 2. Les newsletters/promotions vont dans newsletters, même si d'un client
 3. Les factures vont dans invoices, même si urgentes
 4. En cas de doute → business avec confiance basse
-
+${customRulesBlock}
 Email à classer :
 De : ${email.from}
 À : ${toStr}
@@ -298,7 +302,8 @@ function parseOpenAIResponse(raw: string): ClassificationResult | null {
 // Classifier un email via GPT-4o-mini
 // ----------------------------------------------------------
 export async function classifyEmail(
-  email: EmailToClassify
+  email: EmailToClassify,
+  customRules?: string | null
 ): Promise<ClassificationResult> {
   const openai = getOpenAIClient()
 
@@ -307,7 +312,7 @@ export async function classifyEmail(
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildUserPrompt(email) },
+        { role: 'user', content: buildUserPrompt(email, customRules) },
       ],
       temperature: 0.1,
       max_tokens: 150, // Optimisé QA #11 : réduit de 200 à 150 (JSON compact suffit)
@@ -350,13 +355,14 @@ export async function classifyEmail(
 // Avec rate limiting intégré (100ms entre requêtes)
 // ----------------------------------------------------------
 export async function classifyEmailsBatch(
-  emails: Array<{ id: string; email: EmailToClassify }>
+  emails: Array<{ id: string; email: EmailToClassify }>,
+  customRules?: string | null
 ): Promise<Map<string, ClassificationResult>> {
   const results = new Map<string, ClassificationResult>()
 
   // Traitement séquentiel pour respecter les rate limits OpenAI
   for (const { id, email } of emails) {
-    const result = await classifyEmail(email)
+    const result = await classifyEmail(email, customRules)
     results.set(id, result)
 
     // Pause de 100ms entre les requêtes (évite le rate limit OpenAI)
