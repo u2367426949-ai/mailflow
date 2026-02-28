@@ -146,8 +146,8 @@ export function PricingSection() {
                         <span className="text-4xl font-bold text-[#f5f5f5]">{displayPrice}€</span>
                         <span className="text-[#a0a0a0] mb-1">/mois</span>
                       </div>
-                      {annual ? (
-                        <div className="space-y-0.5">
+                      {annual && (
+                        <div className="space-y-0.5 mb-1">
                           <p className="text-xs text-emerald-400 font-medium">
                             Facturé {annualTotal}€/an
                           </p>
@@ -155,9 +155,8 @@ export function PricingSection() {
                             vs {plan.monthlyPrice * 12}€/an en mensuel
                           </p>
                         </div>
-                      ) : (
-                        <p className="text-sm text-[#6a6a6a]">{plan.emails}</p>
                       )}
+                      <p className="text-sm text-[#6a6a6a]">{plan.emails}</p>
                     </>
                   )}
                 </div>
