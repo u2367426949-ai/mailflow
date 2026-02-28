@@ -105,7 +105,6 @@ export async function PUT(request: NextRequest) {
         ...(body.timezone !== undefined && { timezone: body.timezone }),
         ...(body.isOnboarded !== undefined && { isOnboarded: body.isOnboarded }),
         ...(body.settings !== undefined && { settings: body.settings }),
-        updatedAt: new Date(),
       },
       select: {
         id: true,
