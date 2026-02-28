@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -436,7 +436,7 @@ function SettingsTab({ user }: { user: UserSession | null }) {
 // ----------------------------------------------------------
 // Page Dashboard principale
 // ----------------------------------------------------------
-export default function DashboardPage() {
+function DashboardContent() {
   const { emails, stats, user, loading, syncing, error, sync, handleFeedback } = useDashboardData()
   const searchParams = useSearchParams()
   const tabFromUrl = searchParams.get('tab')
@@ -711,5 +711,17 @@ export default function DashboardPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="text-[#6a6a6a] text-sm">Chargement...</div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   )
 }
