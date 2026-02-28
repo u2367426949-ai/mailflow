@@ -363,27 +363,27 @@ const CATEGORY_LABEL_CONFIG: Record<
   { name: string; color: { backgroundColor: string; textColor: string } }
 > = {
   urgent: {
-    name: 'MailFlow/🔴 Urgent',
+    name: '🔴 Urgent',
     color: { backgroundColor: '#cc3a21', textColor: '#ffffff' },
   },
   personal: {
-    name: 'MailFlow/👤 Personnel',
+    name: '👤 Personnel',
     color: { backgroundColor: '#a46a21', textColor: '#ffffff' },
   },
   business: {
-    name: 'MailFlow/💼 Business',
+    name: '💼 Business',
     color: { backgroundColor: '#285bac', textColor: '#ffffff' },
   },
   invoices: {
-    name: 'MailFlow/📄 Factures',
+    name: '📄 Factures',
     color: { backgroundColor: '#f2b200', textColor: '#000000' },
   },
   newsletters: {
-    name: 'MailFlow/📰 Newsletters',
+    name: '📰 Newsletters',
     color: { backgroundColor: '#0d7813', textColor: '#ffffff' },
   },
   spam: {
-    name: 'MailFlow/🗑️ Spam',
+    name: '🗑️ Spam',
     color: { backgroundColor: '#666666', textColor: '#ffffff' },
   },
 }
