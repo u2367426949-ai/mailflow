@@ -180,19 +180,10 @@ export async function middleware(request: NextRequest) {
   // === Protection des routes dashboard ===
   if (pathname.startsWith('/dashboard')) {
     const token = request.cookies.get('mailflow_session')?.value
-
     if (!token) {
       return NextResponse.redirect(new URL('/', request.url))
     }
-
-    try {
-      await jwtVerify(token, JWT_SECRET)
-    } catch {
-      // Token invalide ou expiré → rediriger vers home
-      const response = NextResponse.redirect(new URL('/', request.url))
-      response.cookies.delete('mailflow_session')
-      return response
-    }
+    // On laisse passer — le dashboard vérifie le token côté serveur via /api/me
   }
 
   return NextResponse.next()
@@ -204,6 +195,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/api/:path*',
+    '/dashboard',
     '/dashboard/:path*',
   ],
 }
