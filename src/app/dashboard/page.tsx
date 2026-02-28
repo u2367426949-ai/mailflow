@@ -21,6 +21,12 @@ import {
   CreditCard,
   Bell,
   CheckCircle2,
+  Download,
+  Tag,
+  Lock,
+  Inbox,
+  Users,
+  Filter,
 } from 'lucide-react'
 import { EmailList } from '@/components/EmailList'
 import { StatsCard, StatsGrid } from '@/components/StatsCard'
@@ -743,6 +749,310 @@ function SettingsTab({ user }: { user: UserSession | null }) {
 }
 
 // ----------------------------------------------------------
+// Composant : Onglet Pro Tools
+// ----------------------------------------------------------
+function ProToolsTab({ emails, stats, user }: {
+  emails: EmailItem[]
+  stats: DashboardStats | null
+  user: UserSession | null
+}) {
+  const isPro = user?.plan === 'pro' || user?.plan === 'business'
+  const [relabeling, setRelabeling] = useState(false)
+  const [relabelResult, setRelabelResult] = useState<{ labeled: number; errors: number } | null>(null)
+  const [exportDone, setExportDone] = useState(false)
+
+  // --- Export CSV ---
+  const handleExportCSV = () => {
+    const headers = ['Date', 'Expéditeur', 'Sujet', 'Catégorie', 'Confiance', 'Lu']
+    const rows = emails.map((e) => [
+      new Date(e.receivedAt).toLocaleDateString('fr-FR'),
+      e.from,
+      `"${e.subject.replace(/"/g, '""')}"`,
+      e.category,
+      e.confidence != null ? `${Math.round(e.confidence * 100)}%` : '—',
+      e.isRead ? 'Oui' : 'Non',
+    ])
+    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `mailflow-emails-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    setExportDone(true)
+    setTimeout(() => setExportDone(false), 3000)
+  }
+
+  // --- Re-labelling Gmail ---
+  const handleRelabel = async () => {
+    setRelabeling(true)
+    setRelabelResult(null)
+    try {
+      const res = await fetch('/api/emails/relabel', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) setRelabelResult({ labeled: data.labeled, errors: data.errors })
+    } catch {
+      setRelabelResult({ labeled: 0, errors: 1 })
+    } finally {
+      setRelabeling(false)
+    }
+  }
+
+  // Stats avancées
+  const topSenders = Object.entries(
+    emails.reduce((acc, e) => {
+      const domain = e.from.replace(/.*@/, '@')
+      acc[domain] = (acc[domain] ?? 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+
+  const readRate = emails.length > 0
+    ? Math.round((emails.filter((e) => e.isRead).length / emails.length) * 100)
+    : 0
+
+  const labeledRate = emails.length > 0
+    ? Math.round((emails.filter((e) => e.isLabeled).length / emails.length) * 100)
+    : 0
+
+  const highConfidence = emails.filter((e) => (e.confidence ?? 0) >= 0.9).length
+
+  // --- UI verrouillé si non Pro ---
+  const LockedOverlay = () => (
+    <div className="absolute inset-0 rounded-xl bg-[#0a0a0a]/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-10">
+      <Lock className="w-6 h-6 text-[#6a6a6a]" />
+      <p className="text-sm text-[#6a6a6a] font-medium text-center px-4">
+        Fonctionnalité réservée au plan Pro
+      </p>
+      <Link
+        href="/dashboard?tab=billing"
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors"
+      >
+        Passer à Pro
+      </Link>
+    </div>
+  )
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-blue-950/50 border border-blue-800/30 flex items-center justify-center">
+          <Zap className="w-4 h-4 text-blue-400" />
+        </div>
+        <div>
+          <h2 className="text-[#f5f5f5] font-semibold">Outils Pro</h2>
+          <p className="text-xs text-[#6a6a6a]">
+            {isPro ? 'Toutes vos fonctionnalités avancées sont actives' : 'Disponible à partir du plan Pro'}
+          </p>
+        </div>
+        {!isPro && (
+          <Link
+            href="/dashboard?tab=billing"
+            className="ml-auto px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors"
+          >
+            Passer à Pro — 14j gratuits
+          </Link>
+        )}
+      </div>
+
+      {/* --- Tri boîte mail entière --- */}
+      <div className="relative rounded-xl border border-[#2a2a2a] bg-[#141414] p-6">
+        {!isPro && <LockedOverlay />}
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-blue-950/50 border border-blue-800/30 flex items-center justify-center flex-shrink-0">
+            <Inbox className="w-5 h-5 text-blue-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-[#f5f5f5] font-semibold mb-1">Tri de toute la boîte mail</h3>
+            <p className="text-sm text-[#6a6a6a] mb-4">
+              Traite l&apos;intégralité de vos emails existants — jusqu&apos;à 50 000 messages. Les emails sont classifiés par IA et labellisés dans Gmail.
+            </p>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 text-center">
+                <div className="text-2xl font-bold text-[#f5f5f5]">{(stats?.totalProcessed ?? 0).toLocaleString()}</div>
+                <div className="text-xs text-[#6a6a6a] mt-0.5">Emails classifiés</div>
+              </div>
+              <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 text-center">
+                <div className="text-2xl font-bold text-[#f5f5f5]">{labeledRate}%</div>
+                <div className="text-xs text-[#6a6a6a] mt-0.5">Labellisés Gmail</div>
+              </div>
+              <div className="rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] p-3 text-center">
+                <div className="text-2xl font-bold text-emerald-400">{highConfidence}</div>
+                <div className="text-xs text-[#6a6a6a] mt-0.5">Confiance &gt; 90%</div>
+              </div>
+            </div>
+            <button
+              onClick={handleRelabel}
+              disabled={relabeling || !isPro}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+            >
+              <Tag className={`w-4 h-4 ${relabeling ? 'animate-spin' : ''}`} />
+              {relabeling ? 'Application des labels...' : 'Appliquer les labels Gmail'}
+            </button>
+            {relabelResult && (
+              <p className="mt-2 text-sm text-emerald-400">
+                ✓ {relabelResult.labeled} email(s) labellisé(s)
+                {relabelResult.errors > 0 && ` — ${relabelResult.errors} erreur(s)`}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* --- Export CSV --- */}
+      <div className="relative rounded-xl border border-[#2a2a2a] bg-[#141414] p-6">
+        {!isPro && <LockedOverlay />}
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-950/50 border border-emerald-800/30 flex items-center justify-center flex-shrink-0">
+            <Download className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-[#f5f5f5] font-semibold mb-1">Export CSV</h3>
+            <p className="text-sm text-[#6a6a6a] mb-4">
+              Téléchargez tous vos emails classifiés ({emails.length} emails chargés) au format CSV — compatible Excel, Google Sheets.
+            </p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={handleExportCSV}
+                disabled={!isPro || emails.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                {exportDone ? '✓ Téléchargement lancé !' : `Exporter ${emails.length} emails`}
+              </button>
+              <span className="text-xs text-[#6a6a6a]">
+                Colonnes : Date, Expéditeur, Sujet, Catégorie, Confiance, Lu
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* --- Stats avancées --- */}
+      <div className="relative rounded-xl border border-[#2a2a2a] bg-[#141414] p-6">
+        {!isPro && <LockedOverlay />}
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-purple-950/50 border border-purple-800/30 flex items-center justify-center flex-shrink-0">
+            <BarChart3 className="w-5 h-5 text-purple-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-[#f5f5f5] font-semibold mb-4">Statistiques avancées</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* Top expéditeurs */}
+              <div>
+                <h4 className="text-xs font-semibold text-[#6a6a6a] uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Users className="w-3.5 h-3.5" /> Top expéditeurs
+                </h4>
+                {topSenders.length === 0 ? (
+                  <p className="text-xs text-[#4a4a4a]">Aucune donnée</p>
+                ) : (
+                  <div className="space-y-2">
+                    {topSenders.map(([domain, count]) => {
+                      const max = topSenders[0][1]
+                      const pct = Math.round((count / max) * 100)
+                      return (
+                        <div key={domain} className="flex items-center gap-2">
+                          <span className="text-xs text-[#a0a0a0] w-28 truncate">{domain}</span>
+                          <div className="flex-1 h-1.5 bg-[#2a2a2a] rounded-full overflow-hidden">
+                            <div className="h-full bg-purple-600 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs text-[#6a6a6a] w-6 text-right">{count}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Métriques clés */}
+              <div>
+                <h4 className="text-xs font-semibold text-[#6a6a6a] uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Filter className="w-3.5 h-3.5" /> Métriques qualité
+                </h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#a0a0a0]">Taux de lecture</span>
+                    <span className="text-xs font-semibold text-[#f5f5f5]">{readRate}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#a0a0a0]">Labels appliqués</span>
+                    <span className="text-xs font-semibold text-[#f5f5f5]">{labeledRate}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#a0a0a0]">Précision IA</span>
+                    <span className={`text-xs font-semibold ${(stats?.accuracy ?? 0) >= 90 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {stats?.accuracy ?? 0}%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#a0a0a0]">Emails aujourd&apos;hui</span>
+                    <span className="text-xs font-semibold text-[#f5f5f5]">{stats?.todayCount ?? 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#a0a0a0]">Temps estimé économisé</span>
+                    <span className="text-xs font-semibold text-purple-400">
+                      {Math.round((stats?.timeSavedMinutes ?? 0) / 60)}h {(stats?.timeSavedMinutes ?? 0) % 60}min
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* --- Catégories personnalisées --- */}
+      <div className="relative rounded-xl border border-[#2a2a2a] bg-[#141414] p-6">
+        {!isPro && <LockedOverlay />}
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-950/50 border border-amber-800/30 flex items-center justify-center flex-shrink-0">
+            <Tag className="w-5 h-5 text-amber-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-[#f5f5f5] font-semibold mb-1">Catégories personnalisées</h3>
+            <p className="text-sm text-[#6a6a6a] mb-3">
+              Les catégories personnalisées peuvent être configurées dans les Réglages de votre compte.
+              MailFlow les appliquera automatiquement à vos prochains emails.
+            </p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {['urgent', 'personal', 'business', 'invoices', 'newsletters', 'spam'].map((cat) => {
+                const count = stats?.byCategory?.[cat] ?? 0
+                const catColors: Record<string, string> = {
+                  urgent: 'border-red-800/50 text-red-400 bg-red-950/20',
+                  personal: 'border-purple-800/50 text-purple-400 bg-purple-950/20',
+                  business: 'border-blue-800/50 text-blue-400 bg-blue-950/20',
+                  invoices: 'border-amber-800/50 text-amber-400 bg-amber-950/20',
+                  newsletters: 'border-emerald-800/50 text-emerald-400 bg-emerald-950/20',
+                  spam: 'border-zinc-700/50 text-zinc-500 bg-zinc-900/20',
+                }
+                return (
+                  <div key={cat} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${catColors[cat]}`}>
+                    <span className="capitalize">{cat}</span>
+                    <span className="opacity-60">({count})</span>
+                  </div>
+                )
+              })}
+            </div>
+            <Link
+              href="/dashboard?tab=settings"
+              className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              Gérer les catégories dans les Réglages
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ----------------------------------------------------------
 // Page Dashboard principale
 // ----------------------------------------------------------
 function DashboardContent() {
@@ -751,7 +1061,7 @@ function DashboardContent() {
   const tabFromUrl = searchParams.get('tab')
   const checkoutStatus = searchParams.get('checkout')
 
-  const validTabs = ['emails', 'stats', 'activity', 'billing', 'settings'] as const
+  const validTabs = ['emails', 'stats', 'activity', 'pro', 'billing', 'settings'] as const
   type TabId = typeof validTabs[number]
 
   const initialTab: TabId = validTabs.includes(tabFromUrl as TabId) ? (tabFromUrl as TabId) : 'emails'
@@ -787,6 +1097,7 @@ function DashboardContent() {
     { id: 'emails' as const, label: 'Emails', icon: Mail },
     { id: 'stats' as const, label: 'Statistiques', icon: BarChart3 },
     { id: 'activity' as const, label: 'Activité', icon: Clock },
+    { id: 'pro' as const, label: 'Outils Pro', icon: Zap },
     { id: 'billing' as const, label: 'Abonnement', icon: CreditCard },
     { id: 'settings' as const, label: 'Réglages', icon: Settings },
   ]
@@ -980,6 +1291,10 @@ function DashboardContent() {
             </h3>
             <ActivityFeed emails={emails} />
           </div>
+        )}
+
+        {activeTab === 'pro' && (
+          <ProToolsTab emails={emails} stats={stats} user={user} />
         )}
 
         {activeTab === 'billing' && (
