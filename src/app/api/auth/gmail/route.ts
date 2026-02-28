@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
     // Rediriger vers l'onboarding ou le dashboard
     const redirectTo = user.isOnboarded
       ? `${APP_URL}/dashboard`
-      : `${APP_URL}/onboarding`
+      : `${APP_URL}/onboarding?auth=success`
 
     const response = NextResponse.redirect(redirectTo)
 
