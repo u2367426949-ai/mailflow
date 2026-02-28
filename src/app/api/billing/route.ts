@@ -7,32 +7,17 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { jwtVerify } from 'jose'
 import {
   createCheckoutSession,
   createBillingPortalSession,
   getUserInvoices,
   getPublicPlans,
 } from '@/lib/stripe'
+import { getUserIdFromRequest } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
-const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL!
-
-// ----------------------------------------------------------
-// Utilitaire : extraire l'userId depuis le JWT cookie
-// ----------------------------------------------------------
-async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
-  const token = request.cookies.get('mailflow_session')?.value
-  if (!token) return null
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload.sub ?? null
-  } catch {
-    return null
-  }
-}
 
 // ----------------------------------------------------------
 // POST — Créer une session Stripe Checkout

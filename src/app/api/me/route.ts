@@ -5,24 +5,25 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { jwtVerify, SignJWT } from 'jose'
 import { Prisma } from '@prisma/client'
+import { z } from 'zod'
 import { db } from '@/lib/db'
+import { getUserIdFromRequest } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
-const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
-
-async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
-  const token = request.cookies.get('mailflow_session')?.value
-  if (!token) return null
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload.sub ?? null
-  } catch {
-    return null
-  }
-}
+// ----------------------------------------------------------
+// Schéma Zod pour la validation du body PUT /api/me
+// ----------------------------------------------------------
+const updateProfileSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  digestEnabled: z.boolean().optional(),
+  digestTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format HH:MM attendu').optional(),
+  timezone: z.string().max(50).optional(),
+  isOnboarded: z.boolean().optional(),
+  enabledCategories: z.array(z.string().min(1).max(50)).max(20).optional(),
+  settings: z.record(z.unknown()).optional(),
+}).strict()
 
 // ----------------------------------------------------------
 // GET — Profil utilisateur connecté
@@ -68,18 +69,18 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: {
-    name?: string
-    digestEnabled?: boolean
-    digestTime?: string
-    timezone?: string
-    isOnboarded?: boolean
-    enabledCategories?: string[]
-    settings?: Record<string, unknown>
-  }
+  let body: z.infer<typeof updateProfileSchema>
 
   try {
-    body = await request.json()
+    const raw = await request.json()
+    const result = updateProfileSchema.safeParse(raw)
+    if (!result.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: result.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+    body = result.data
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }

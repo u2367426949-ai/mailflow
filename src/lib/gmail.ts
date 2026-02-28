@@ -94,8 +94,9 @@ export async function getGoogleProfile(accessToken: string) {
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!
 
 function getKeyBuffer(): Buffer {
-  // Assurer que la clé fait exactement 32 bytes
-  return Buffer.from(ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32), 'utf8')
+  // Dériver une clé 32 bytes via SHA-256 (plus sûr que le padding avec des zéros)
+  const crypto = require('crypto') as typeof import('crypto')
+  return crypto.createHash('sha256').update(ENCRYPTION_KEY).digest()
 }
 
 export function encryptToken(token: string): string {
@@ -321,7 +322,7 @@ export async function createGmailLabel(
       name,
       labelListVisibility: 'labelShow',
       messageListVisibility: 'show',
-      color: color ?? { backgroundColor: '#285bac', textColor: '#ffffff' },
+      color: color ?? { backgroundColor: '#4a86e8', textColor: '#ffffff' },
     },
   })
 

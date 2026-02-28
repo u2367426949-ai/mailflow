@@ -43,6 +43,9 @@ interface UserSession {
   email: string
   plan: string
   isOnboarded: boolean
+  digestEnabled?: boolean
+  digestTime?: string
+  timezone?: string
 }
 
 // ----------------------------------------------------------
@@ -334,9 +337,9 @@ function ActivityFeed({ emails }: { emails: EmailItem[] }) {
 // ----------------------------------------------------------
 function SettingsTab({ user }: { user: UserSession | null }) {
   const [name, setName] = useState(user?.name ?? '')
-  const [digestEnabled, setDigestEnabled] = useState(true)
-  const [digestTime, setDigestTime] = useState('08:00')
-  const [timezone, setTimezone] = useState('Europe/Paris')
+  const [digestEnabled, setDigestEnabled] = useState(user?.digestEnabled ?? true)
+  const [digestTime, setDigestTime] = useState(user?.digestTime ?? '08:00')
+  const [timezone, setTimezone] = useState(user?.timezone ?? 'Europe/Paris')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 

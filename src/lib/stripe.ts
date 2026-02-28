@@ -33,12 +33,6 @@ export function getPlanPriceMap(): Record<string, string> {
   }
 }
 
-export const PLAN_PRICE_MAP: Record<string, string> = {
-  starter: '',
-  pro: '',
-  business: '',
-}
-
 // ----------------------------------------------------------
 // Mapping plan → limits
 // ----------------------------------------------------------

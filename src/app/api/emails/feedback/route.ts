@@ -5,14 +5,12 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { jwtVerify } from 'jose'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { rateLimit, RATE_LIMIT_CONFIGS, getClientIpFromHeaders } from '@/lib/rateLimit'
+import { getUserIdFromRequest } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
-
-const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 
 // ----------------------------------------------------------
 // Schémas Zod pour la validation des inputs (QA Fix #4)
@@ -53,21 +51,6 @@ const GetFeedbackQuerySchema = z.object({
     .optional()
     .transform((v) => Math.max(parseInt(v ?? '0', 10) || 0, 0)),
 })
-
-// ----------------------------------------------------------
-// Utilitaire : extraire l'userId depuis le JWT cookie
-// ----------------------------------------------------------
-async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
-  const token = request.cookies.get('mailflow_session')?.value
-  if (!token) return null
-
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload.sub ?? null
-  } catch {
-    return null
-  }
-}
 
 // ----------------------------------------------------------
 // POST — Soumettre un feedback de classification

@@ -65,6 +65,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${APP_URL}/onboarding?error=invalid_callback`)
   }
 
+  // Vérification anti-CSRF : comparer le state avec le cookie oauth_state
+  const storedState = request.cookies.get('oauth_state')?.value
+  if (!storedState || storedState !== state) {
+    console.error('[Auth] CSRF state mismatch — stored:', storedState, 'received:', state)
+    return NextResponse.redirect(`${APP_URL}/onboarding?error=csrf_mismatch`)
+  }
+
   try {
     // Échanger le code contre les tokens
     let tokens

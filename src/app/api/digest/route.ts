@@ -5,38 +5,37 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { jwtVerify } from 'jose'
 import { Resend } from 'resend'
 import { db } from '@/lib/db'
 import { generateDigestSummary } from '@/lib/openai'
+import { getUserIdFromRequest } from '@/lib/auth'
 import { startOfDay, endOfDay, subDays, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 export const dynamic = 'force-dynamic'
 
-const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
-const resend = new Resend(process.env.RESEND_API_KEY!)
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'digest@mailflow.ai'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL!
 
-// ----------------------------------------------------------
-// Utilitaire : extraire l'userId depuis le JWT cookie
-// ----------------------------------------------------------
-async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
-  const token = request.cookies.get('mailflow_session')?.value
-  if (!token) return null
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload.sub ?? null
-  } catch {
-    return null
+// Lazy init Resend pour éviter un crash au build si RESEND_API_KEY est absente
+let resendClient: Resend | null = null
+function getResend(): Resend {
+  if (!resendClient) {
+    resendClient = new Resend(process.env.RESEND_API_KEY!)
   }
+  return resendClient
 }
 
 function isCronAuthorized(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret) return true
+  if (!cronSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Digest] CRON_SECRET is not set in production — denying cron access')
+      return false
+    }
+    return true
+  }
   return authHeader === `Bearer ${cronSecret}`
 }
 
@@ -304,7 +303,7 @@ export async function POST(request: NextRequest) {
           newsletters: newsletters.map((e) => ({ subject: e.subject, from: e.from })),
         })
 
-        const { error: sendError } = await resend.emails.send({
+        const { error: sendError } = await getResend().emails.send({
           from: FROM_EMAIL,
           to: user.email,
           subject: `📬 Ton digest MailFlow du ${dateFormatted}`,

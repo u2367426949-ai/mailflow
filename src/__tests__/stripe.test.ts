@@ -10,7 +10,6 @@ import {
   canUseFeature,
   getPublicPlans,
   PLAN_LIMITS,
-  PLAN_PRICE_MAP,
 } from '../lib/stripe'
 
 // ----------------------------------------------------------

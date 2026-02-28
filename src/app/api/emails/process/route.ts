@@ -32,7 +32,14 @@ function isCronAuthorized(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
 
-  if (!cronSecret) return true // Développement sans secret
+  // En production, CRON_SECRET est obligatoire
+  if (!cronSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Process] CRON_SECRET is not set in production — denying cron access')
+      return false
+    }
+    return true // Développement sans secret
+  }
   return authHeader === `Bearer ${cronSecret}`
 }
 
