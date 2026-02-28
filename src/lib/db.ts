@@ -52,23 +52,33 @@ function createPrismaClient(): PrismaClient {
 
 // ----------------------------------------------------------
 // Singleton global (évite les connexions multiples en dev HMR)
+// Lazy initialization pour éviter le crash au build Vercel
 // ----------------------------------------------------------
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-export const db = globalForPrisma.prisma ?? createPrismaClient()
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = db
+function getDbClient(): PrismaClient {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createPrismaClient()
+  }
+  return globalForPrisma.prisma
 }
+
+export const db = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    return (getDbClient() as Record<string | symbol, unknown>)[prop]
+  },
+})
 
 // ----------------------------------------------------------
 // Graceful shutdown (Node.js only — pas en Edge runtime)
 // ----------------------------------------------------------
 if (typeof process !== 'undefined' && process.env.NEXT_RUNTIME !== 'edge') {
   process.on('beforeExit', async () => {
-    await db.$disconnect()
+    if (globalForPrisma.prisma) {
+      await globalForPrisma.prisma.$disconnect()
+    }
   })
 }
 
