@@ -743,34 +743,50 @@ function DashboardContent() {
             {/* Plans disponibles si free */}
             {user?.plan === 'free' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  { id: 'starter', name: 'Starter', price: '9€/mois', emails: '100 emails/jour' },
-                  { id: 'pro', name: 'Pro', price: '29€/mois', emails: '500 emails/jour', highlighted: true },
-                  { id: 'business', name: 'Business', price: '79€/mois', emails: '2000 emails/jour' },
-                ].map((plan) => (
-                  <div
-                    key={plan.id}
-                    className={`p-5 rounded-xl border ${
-                      plan.highlighted
-                        ? 'border-blue-600 bg-blue-950/20'
-                        : 'border-[#2a2a2a] bg-[#141414]'
-                    }`}
+                {/* Starter */}
+                <div className="p-5 rounded-xl border border-[#2a2a2a] bg-[#141414] flex flex-col">
+                  <div className="text-lg font-bold text-[#f5f5f5] mb-1">Starter</div>
+                  <div className="text-2xl font-bold text-[#f5f5f5] mb-1">9€<span className="text-base font-normal text-[#6a6a6a]">/mois</span></div>
+                  <div className="text-xs text-[#6a6a6a] mb-1">200 emails/jour</div>
+                  <div className="text-xs text-[#6a6a6a] mb-4">Nouveaux emails uniquement</div>
+                  <button
+                    onClick={() => handleCheckout('starter')}
+                    className="mt-auto w-full py-2 rounded-lg text-sm font-semibold bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5] transition-colors"
                   >
-                    <div className="text-lg font-bold text-[#f5f5f5] mb-1">{plan.name}</div>
-                    <div className="text-2xl font-bold text-[#f5f5f5] mb-1">{plan.price}</div>
-                    <div className="text-xs text-[#6a6a6a] mb-4">{plan.emails}</div>
-                    <button
-                      onClick={() => handleCheckout(plan.id)}
-                      className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${
-                        plan.highlighted
-                          ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                          : 'bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5]'
-                      }`}
-                    >
-                      Essayer 14 jours gratuit
-                    </button>
+                    Essayer 14 jours gratuit
+                  </button>
+                </div>
+
+                {/* Pro */}
+                <div className="p-5 rounded-xl border border-blue-600 bg-blue-950/20 flex flex-col relative">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">Populaire</span>
                   </div>
-                ))}
+                  <div className="text-lg font-bold text-[#f5f5f5] mb-1">Pro</div>
+                  <div className="text-2xl font-bold text-[#f5f5f5] mb-1">29€<span className="text-base font-normal text-[#6a6a6a]">/mois</span></div>
+                  <div className="text-xs text-[#6a6a6a] mb-1">Emails illimités</div>
+                  <div className="text-xs text-blue-400 font-medium mb-4">✨ Tri de toute ta boîte (50k emails)</div>
+                  <button
+                    onClick={() => handleCheckout('pro')}
+                    className="mt-auto w-full py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                  >
+                    Essayer 14 jours gratuit
+                  </button>
+                </div>
+
+                {/* Business */}
+                <div className="p-5 rounded-xl border border-[#2a2a2a] bg-[#141414] flex flex-col">
+                  <div className="text-lg font-bold text-[#f5f5f5] mb-1">Business</div>
+                  <div className="text-2xl font-bold text-[#f5f5f5] mb-1">Sur devis</div>
+                  <div className="text-xs text-[#6a6a6a] mb-1">Volume sur mesure</div>
+                  <div className="text-xs text-purple-400 font-medium mb-4">Multi-comptes · API · SLA</div>
+                  <a
+                    href="mailto:hello@mailflow.ai?subject=MailFlow Business — Demande de devis"
+                    className="mt-auto w-full py-2 rounded-lg text-sm font-semibold border border-purple-700/50 text-purple-300 hover:bg-purple-950/30 transition-colors text-center"
+                  >
+                    Nous contacter →
+                  </a>
+                </div>
               </div>
             )}
           </div>

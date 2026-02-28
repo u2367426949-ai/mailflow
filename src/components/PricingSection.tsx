@@ -12,7 +12,7 @@ const plans = [
     id: 'starter',
     name: 'Starter',
     monthlyPrice: 9,
-    emails: '100 emails/jour',
+    emails: 'Jusqu\'à 100 emails/jour',
     features: [
       'Tri IA GPT-4o-mini',
       'Labels Gmail automatiques',
@@ -28,15 +28,15 @@ const plans = [
     id: 'pro',
     name: 'Pro',
     monthlyPrice: 29,
-    emails: '500 emails/jour',
+    emails: 'Tri de toute la boîte mail (jusqu\'à 50 000 messages)',
     badge: 'Populaire',
     features: [
-      'Tout Starter',
+      'Tri de toute la boîte mail',
       'Catégories personnalisées',
       'Export CSV',
       'Stats avancées',
       'Priorité support',
-      'Onboarding dédié',
+      'Onboarding guidé',
     ],
     highlighted: true,
     cta: 'Choisir Pro',
@@ -45,17 +45,17 @@ const plans = [
     id: 'business',
     name: 'Business',
     monthlyPrice: 79,
-    emails: '2000 emails/jour',
+    emails: 'Sur-mesure — contactez-nous pour un devis',
     features: [
       'Tout Pro',
       'Multi-comptes Gmail',
       'Accès API',
       'SLA 99.9%',
+      'Onboarding & intégration dédiée',
       'Support prioritaire 24/7',
-      'Facturation annuelle -20%',
     ],
     highlighted: false,
-    cta: 'Contacter',
+    cta: 'Contactez nos ventes',
   },
 ]
 
@@ -162,16 +162,29 @@ export function PricingSection() {
                   ))}
                 </ul>
 
-                <Link
-                  href={`/onboarding?plan=${plan.id}&billing=${annual ? 'annual' : 'monthly'}`}
-                  className={`block w-full text-center py-3 px-6 rounded-xl font-semibold text-sm transition-all ${
-                    plan.highlighted
-                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25'
-                      : 'bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5]'
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
+                {plan.id === 'business' ? (
+                  <a
+                    href={`mailto:sales@mailflow.ai?subject=Demande%20devis%20Business%20-%20MailFlow`}
+                    className={`block w-full text-center py-3 px-6 rounded-xl font-semibold text-sm transition-all ${
+                      plan.highlighted
+                        ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25'
+                        : 'bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5]'
+                    }`}
+                  >
+                    {plan.cta}
+                  </a>
+                ) : (
+                  <Link
+                    href={`/onboarding?plan=${plan.id}&billing=${annual ? 'annual' : 'monthly'}`}
+                    className={`block w-full text-center py-3 px-6 rounded-xl font-semibold text-sm transition-all ${
+                      plan.highlighted
+                        ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25'
+                        : 'bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5]'
+                    }`}
+                  >
+                    {plan.cta}
+                  </Link>
+                )}
               </div>
             )
           })}

@@ -50,6 +50,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Business is contact-only (contact for quote). Do not allow self-serve checkout.
+    if (plan === 'business') {
+      return NextResponse.json(
+        {
+          error: 'Business plan requires contacting sales for a custom quote',
+          contact: 'mailto:sales@mailflow.ai?subject=Demande%20devis%20Business%20-%20MailFlow',
+        },
+        { status: 400 }
+      )
+    }
+
     try {
       const { url, sessionId } = await createCheckoutSession({
         userId,

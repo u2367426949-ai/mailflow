@@ -14,12 +14,14 @@ import type { Plan } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
-// Limite d'emails par exécution par utilisateur selon le plan
+// Limite d'emails par exécution (toutes les 5min) par utilisateur selon le plan
+// Starter : 200/jour ÷ ~288 exécutions/jour ≈ 10/exec (marge de sécurité)
+// Pro / Business : illimité en pratique (999 = plafond de sécurité)
 const PLAN_EMAIL_LIMITS: Record<Plan, number> = {
   free: 0,
-  starter: 25,
-  pro: 50,
-  business: 100,
+  starter: 10,
+  pro: 999,
+  business: 999,
 }
 
 // Taille des batches pour le traitement parallèle

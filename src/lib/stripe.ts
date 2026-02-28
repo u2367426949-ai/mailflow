@@ -55,7 +55,8 @@ export const PLAN_LIMITS: Record<
     ],
   },
   pro: {
-    emailsPerDay: 500,
+    // Pro is the "full mailbox" offering — large cap to allow processing an entire mailbox
+    emailsPerDay: 50000,
     features: [
       'Tout Starter',
       'Catégories personnalisées',
@@ -64,7 +65,8 @@ export const PLAN_LIMITS: Record<
     ],
   },
   business: {
-    emailsPerDay: 2000,
+    // Business remains an elevated/tailored offering (kept higher than Pro)
+    emailsPerDay: 100000,
     features: [
       'Tout Pro',
       'API access',
@@ -282,7 +284,7 @@ export function getPublicPlans() {
       price: 29,
       currency: 'EUR',
       interval: 'month',
-      emailsPerDay: 500,
+      emailsPerDay: 50000,
       trialDays: 14,
       features: PLAN_LIMITS.pro.features,
       highlighted: true,
@@ -293,7 +295,7 @@ export function getPublicPlans() {
       price: 79,
       currency: 'EUR',
       interval: 'month',
-      emailsPerDay: 2000,
+      emailsPerDay: 100000,
       trialDays: 14,
       features: PLAN_LIMITS.business.features,
       highlighted: false,
