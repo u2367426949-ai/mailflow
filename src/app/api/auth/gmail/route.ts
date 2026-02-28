@@ -208,6 +208,7 @@ export async function GET(request: NextRequest) {
       sub: user.id,
       email: user.email,
       name: user.name,
+      avatar: user.avatar,
       plan: user.plan,
       isOnboarded: user.isOnboarded,
     })

@@ -3,6 +3,9 @@
 // ============================================================
 
 import Link from 'next/link'
+import Image from 'next/image'
+import { cookies } from 'next/headers'
+import { jwtVerify } from 'jose'
 import {
   Mail,
   Zap,
@@ -15,10 +18,33 @@ import {
 } from 'lucide-react'
 import { PricingSection } from '@/components/PricingSection'
 
+const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
+
+// ----------------------------------------------------------
+// Lire la session depuis le cookie JWT (Server Component)
+// ----------------------------------------------------------
+async function getSession(): Promise<{ name?: string; avatar?: string; email?: string } | null> {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('mailflow_session')?.value
+    if (!token) return null
+    const { payload } = await jwtVerify(token, JWT_SECRET)
+    return {
+      name: payload['name'] as string | undefined,
+      avatar: payload['avatar'] as string | undefined,
+      email: payload['email'] as string | undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
 // ----------------------------------------------------------
 // Composants locaux
 // ----------------------------------------------------------
-function NavBar() {
+function NavBar({ session }: { session: { name?: string; avatar?: string; email?: string } | null }) {
+  const firstName = session?.name?.split(' ')[0]
+
   return (
     <header className="sticky top-0 z-50 border-b border-[#2a2a2a] bg-[#0a0a0a]/80 backdrop-blur-sm">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -39,18 +65,47 @@ function NavBar() {
             </Link>
           </nav>
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-sm text-[#a0a0a0] hover:text-[#f5f5f5] transition-colors hidden sm:block"
-            >
-              Connexion
-            </Link>
-            <Link
-              href="/onboarding"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
-            >
-              Essai gratuit →
-            </Link>
+            {session ? (
+              /* Utilisateur connecté → avatar + lien dashboard */
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-[#2a2a2a] hover:border-[#3a3a3a] bg-[#141414] hover:bg-[#1e1e1e] transition-all"
+              >
+                {session.avatar ? (
+                  <Image
+                    src={session.avatar}
+                    alt={session.name ?? 'Avatar'}
+                    width={24}
+                    height={24}
+                    className="rounded-full"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                    {firstName?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                )}
+                <span className="text-sm text-[#f5f5f5] font-medium hidden sm:block">
+                  {firstName ?? 'Dashboard'}
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 text-[#6a6a6a] hidden sm:block" />
+              </Link>
+            ) : (
+              /* Non connecté → liens classiques */
+              <>
+                <Link
+                  href="/login"
+                  className="text-sm text-[#a0a0a0] hover:text-[#f5f5f5] transition-colors hidden sm:block"
+                >
+                  Connexion
+                </Link>
+                <Link
+                  href="/onboarding"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  Essai gratuit →
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -389,10 +444,12 @@ function Footer() {
 // ----------------------------------------------------------
 // Page principale
 // ----------------------------------------------------------
-export default function LandingPage() {
+export default async function LandingPage() {
+  const session = await getSession()
+
   return (
     <>
-      <NavBar />
+      <NavBar session={session} />
       <main>
         <HeroSection />
         <FeaturesSection />
