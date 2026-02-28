@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify, SignJWT } from 'jose'
+import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 
 const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
@@ -104,7 +105,7 @@ export async function PUT(request: NextRequest) {
         ...(body.digestTime !== undefined && { digestTime: body.digestTime }),
         ...(body.timezone !== undefined && { timezone: body.timezone }),
         ...(body.isOnboarded !== undefined && { isOnboarded: body.isOnboarded }),
-        ...(body.settings !== undefined && { settings: body.settings }),
+        ...(body.settings !== undefined && { settings: body.settings as Prisma.InputJsonValue }),
       },
       select: {
         id: true,
