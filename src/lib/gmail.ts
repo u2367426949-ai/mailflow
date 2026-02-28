@@ -372,15 +372,15 @@ const CATEGORY_LABEL_CONFIG: Record<
   },
   business: {
     name: '💼 Business',
-    color: { backgroundColor: '#285bac', textColor: '#ffffff' },
+    color: { backgroundColor: '#3066be', textColor: '#ffffff' },
   },
   invoices: {
     name: '📄 Factures',
-    color: { backgroundColor: '#f2b200', textColor: '#000000' },
+    color: { backgroundColor: '#f2c960', textColor: '#000000' },
   },
   newsletters: {
     name: '📰 Newsletters',
-    color: { backgroundColor: '#0d7813', textColor: '#ffffff' },
+    color: { backgroundColor: '#0b804b', textColor: '#ffffff' },
   },
   spam: {
     name: '🗑️ Spam',
