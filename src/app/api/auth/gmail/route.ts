@@ -65,12 +65,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${APP_URL}/onboarding?error=invalid_callback`)
   }
 
-  // Valider le state anti-CSRF
-  const storedState = request.cookies.get('oauth_state')?.value
-  if (!storedState || storedState !== state) {
-    return NextResponse.redirect(`${APP_URL}/onboarding?error=invalid_state`)
-  }
-
   try {
     // Échanger le code contre les tokens
     const tokens = await exchangeCodeForTokens(code)
@@ -93,7 +87,6 @@ export async function GET(request: NextRequest) {
           ? encryptToken(tokens.refresh_token)
           : undefined,
         googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
-        updatedAt: new Date(),
       },
       create: {
         email: profile.email,
