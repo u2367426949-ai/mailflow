@@ -10,6 +10,8 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { rateLimit, RATE_LIMIT_CONFIGS, getClientIpFromHeaders } from '@/lib/rateLimit'
 
+export const dynamic = 'force-dynamic'
+
 const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 
 // ----------------------------------------------------------

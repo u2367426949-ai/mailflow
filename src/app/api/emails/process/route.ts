@@ -12,6 +12,8 @@ import { classifyEmail } from '@/lib/openai'
 import { rateLimit, RATE_LIMIT_CONFIGS, getClientIpFromHeaders } from '@/lib/rateLimit'
 import type { Plan } from '@prisma/client'
 
+export const dynamic = 'force-dynamic'
+
 // Limite d'emails par exécution par utilisateur selon le plan
 const PLAN_EMAIL_LIMITS: Record<Plan, number> = {
   free: 0,

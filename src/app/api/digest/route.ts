@@ -12,6 +12,8 @@ import { generateDigestSummary } from '@/lib/openai'
 import { startOfDay, endOfDay, subDays, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
+export const dynamic = 'force-dynamic'
+
 const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 const resend = new Resend(process.env.RESEND_API_KEY!)
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'digest@mailflow.ai'

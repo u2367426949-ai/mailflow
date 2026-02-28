@@ -8,6 +8,8 @@ import { jwtVerify } from 'jose'
 import { db } from '@/lib/db'
 import { subDays } from 'date-fns'
 
+export const dynamic = 'force-dynamic'
+
 const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 
 async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {

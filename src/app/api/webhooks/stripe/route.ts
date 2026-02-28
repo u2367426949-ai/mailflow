@@ -8,6 +8,8 @@ import { getStripeClient, syncSubscriptionFromStripe } from '@/lib/stripe'
 import { db } from '@/lib/db'
 import type Stripe from 'stripe'
 
+export const dynamic = 'force-dynamic'
+
 // ----------------------------------------------------------
 // POST — Recevoir et traiter les événements Stripe
 // ----------------------------------------------------------

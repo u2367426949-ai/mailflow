@@ -9,6 +9,8 @@ import { jwtVerify, SignJWT } from 'jose'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 
 async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
