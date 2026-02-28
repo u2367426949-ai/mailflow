@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Mail,
@@ -293,17 +294,172 @@ function ActivityFeed({ emails }: { emails: EmailItem[] }) {
 }
 
 // ----------------------------------------------------------
+// Composant : Onglet Réglages
+// ----------------------------------------------------------
+function SettingsTab({ user }: { user: UserSession | null }) {
+  const [name, setName] = useState(user?.name ?? '')
+  const [digestEnabled, setDigestEnabled] = useState(true)
+  const [digestTime, setDigestTime] = useState('08:00')
+  const [timezone, setTimezone] = useState('Europe/Paris')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    setSaved(false)
+    try {
+      const res = await fetch('/api/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, digestEnabled, digestTime, timezone }),
+      })
+      if (res.ok) {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
+      }
+    } catch (err) {
+      console.error('[Settings] Save error:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    document.cookie = 'mailflow_session=; path=/; max-age=0'
+    window.location.href = '/'
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Profil */}
+      <div className="rounded-xl border border-[#2a2a2a] bg-[#141414] p-6">
+        <h3 className="text-[#f5f5f5] font-semibold mb-4 flex items-center gap-2">
+          <Settings className="w-4 h-4 text-blue-400" />
+          Profil
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-[#6a6a6a] mb-1.5">Nom</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-sm text-[#f5f5f5] focus:outline-none focus:border-blue-600"
+              placeholder="Votre nom"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-[#6a6a6a] mb-1.5">Email</label>
+            <div className="px-3 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-sm text-[#6a6a6a]">
+              {user?.email ?? '—'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Digest */}
+      <div className="rounded-xl border border-[#2a2a2a] bg-[#141414] p-6">
+        <h3 className="text-[#f5f5f5] font-semibold mb-4 flex items-center gap-2">
+          <Mail className="w-4 h-4 text-emerald-400" />
+          Digest quotidien
+        </h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-[#f5f5f5]">Activer le digest</div>
+              <div className="text-xs text-[#6a6a6a]">Recevez un résumé quotidien de vos emails</div>
+            </div>
+            <button
+              onClick={() => setDigestEnabled(!digestEnabled)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${
+                digestEnabled ? 'bg-blue-600' : 'bg-[#3a3a3a]'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                  digestEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          {digestEnabled && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-[#6a6a6a] mb-1.5">Heure d&apos;envoi</label>
+                <input
+                  type="time"
+                  value={digestTime}
+                  onChange={(e) => setDigestTime(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-sm text-[#f5f5f5] focus:outline-none focus:border-blue-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[#6a6a6a] mb-1.5">Fuseau horaire</label>
+                <select
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-sm text-[#f5f5f5] focus:outline-none focus:border-blue-600"
+                >
+                  <option value="Europe/Paris">Europe/Paris</option>
+                  <option value="Europe/London">Europe/London</option>
+                  <option value="America/New_York">America/New_York</option>
+                  <option value="America/Los_Angeles">America/Los_Angeles</option>
+                  <option value="Asia/Tokyo">Asia/Tokyo</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+        >
+          {saving ? 'Sauvegarde...' : saved ? '✓ Sauvegardé' : 'Sauvegarder'}
+        </button>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-950/20 rounded-lg transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          Se déconnecter
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ----------------------------------------------------------
 // Page Dashboard principale
 // ----------------------------------------------------------
 export default function DashboardPage() {
   const { emails, stats, user, loading, syncing, error, sync, handleFeedback } = useDashboardData()
-  const [activeTab, setActiveTab] = useState<'emails' | 'stats' | 'activity' | 'billing'>('emails')
+  const searchParams = useSearchParams()
+  const tabFromUrl = searchParams.get('tab')
+
+  const validTabs = ['emails', 'stats', 'activity', 'billing', 'settings'] as const
+  type TabId = typeof validTabs[number]
+
+  const initialTab: TabId = validTabs.includes(tabFromUrl as TabId) ? (tabFromUrl as TabId) : 'emails'
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab)
+
+  // Sync tab with URL changes
+  useEffect(() => {
+    if (tabFromUrl && validTabs.includes(tabFromUrl as TabId)) {
+      setActiveTab(tabFromUrl as TabId)
+    }
+  }, [tabFromUrl])
 
   const tabs = [
     { id: 'emails' as const, label: 'Emails', icon: Mail },
     { id: 'stats' as const, label: 'Statistiques', icon: BarChart3 },
     { id: 'activity' as const, label: 'Activité', icon: Clock },
     { id: 'billing' as const, label: 'Abonnement', icon: CreditCard },
+    { id: 'settings' as const, label: 'Réglages', icon: Settings },
   ]
 
   const handleCheckout = async (plan: string) => {
@@ -548,6 +704,10 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <SettingsTab user={user} />
         )}
       </main>
     </div>
