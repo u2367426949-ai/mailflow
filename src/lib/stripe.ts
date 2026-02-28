@@ -23,12 +23,20 @@ export function getStripeClient(): Stripe {
 }
 
 // ----------------------------------------------------------
-// Mapping plan → price ID
+// Mapping plan → price ID (lazy to avoid build-time crashes)
 // ----------------------------------------------------------
+export function getPlanPriceMap(): Record<string, string> {
+  return {
+    starter: process.env.STRIPE_STARTER_PRICE_ID ?? '',
+    pro: process.env.STRIPE_PRO_PRICE_ID ?? '',
+    business: process.env.STRIPE_BUSINESS_PRICE_ID ?? '',
+  }
+}
+
 export const PLAN_PRICE_MAP: Record<string, string> = {
-  starter: process.env.STRIPE_STARTER_PRICE_ID!,
-  pro: process.env.STRIPE_PRO_PRICE_ID!,
-  business: process.env.STRIPE_BUSINESS_PRICE_ID!,
+  starter: '',
+  pro: '',
+  business: '',
 }
 
 // ----------------------------------------------------------
@@ -122,7 +130,7 @@ export async function createCheckoutSession(
 
   const { userId, plan, successUrl, cancelUrl, trialDays = 14 } = options
 
-  const priceId = PLAN_PRICE_MAP[plan]
+  const priceId = getPlanPriceMap()[plan]
   if (!priceId) {
     throw new Error(`Invalid plan: ${plan}`)
   }
