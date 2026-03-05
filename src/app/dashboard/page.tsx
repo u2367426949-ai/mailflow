@@ -923,7 +923,7 @@ function ProToolsTab({ emails, stats, user }: {
   // Envoyer le premier message d'accueil quand isPro devient true
   useEffect(() => {
     if (!isPro || chatMessages.length > 0) return
-    handleSendChat('Bonjour, analyse ma boîte mail et propose-moi des règles de tri personnalisées.')
+    handleSendChat('Analyse ma boîte mail et propose-moi directement des règles de tri adaptées à mes emails.')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPro])
 
