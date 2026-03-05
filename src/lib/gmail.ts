@@ -207,36 +207,86 @@ export async function fetchNewEmails(
   since?: Date,
   maxResults = 50
 ): Promise<GmailMessage[]> {
+  return fetchEmails(userId, { since, maxResults, scope: 'inbox' })
+}
+
+// ----------------------------------------------------------
+// Récupérer TOUS les emails de la boîte mail (avec pagination)
+// Supporte 10 000+ emails grâce au pageToken
+// ----------------------------------------------------------
+export async function fetchAllMailboxEmails(
+  userId: string,
+  maxResults = 50000,
+  onProgress?: (fetched: number) => void
+): Promise<GmailMessage[]> {
+  return fetchEmails(userId, { maxResults, scope: 'all', onProgress })
+}
+
+// ----------------------------------------------------------
+// Fonction interne : récupérer des emails avec pagination
+// ----------------------------------------------------------
+interface FetchEmailsOptions {
+  since?: Date
+  maxResults?: number
+  scope?: 'inbox' | 'all'   // 'all' = toute la boîte mail
+  onProgress?: (fetched: number) => void
+}
+
+async function fetchEmails(
+  userId: string,
+  options: FetchEmailsOptions = {}
+): Promise<GmailMessage[]> {
+  const { since, maxResults = 50, scope = 'inbox', onProgress } = options
   const gmail = await getGmailClient(userId)
 
   // Construire la query Gmail
-  let query = 'in:inbox'
+  // 'all' = pas de filtre in:inbox, on prend tout sauf spam/trash
+  let query = scope === 'all' ? '-in:spam -in:trash' : 'in:inbox'
   if (since) {
     const sinceTimestamp = Math.floor(since.getTime() / 1000)
     query += ` after:${sinceTimestamp}`
   }
 
-  // Lister les messages
-  const listResponse = await gmail.users.messages.list({
-    userId: 'me',
-    q: query,
-    maxResults,
-  })
+  // Phase 1 : Collecter tous les message IDs avec pagination
+  const allMessageIds: Array<{ id: string }> = []
+  let pageToken: string | undefined = undefined
+  const PAGE_SIZE = 500 // Max autorisé par Gmail API
 
-  const messageIds = listResponse.data.messages ?? []
-  if (messageIds.length === 0) return []
+  do {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const listResponse: any = await gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: Math.min(PAGE_SIZE, maxResults - allMessageIds.length),
+      pageToken,
+    })
 
-  // Récupérer les détails de chaque message (en batch de 25 pour performance)
-  const messages: GmailMessage[] = []
+    const messages = listResponse.data.messages ?? []
+    for (const msg of messages) {
+      if (msg.id) {
+        allMessageIds.push({ id: msg.id })
+      }
+    }
+
+    pageToken = listResponse.data.nextPageToken ?? undefined
+
+    // Callback de progression (pour le sort-all)
+    if (onProgress) onProgress(allMessageIds.length)
+
+    console.log(`[Gmail] Listed ${allMessageIds.length} message IDs (page done, hasMore: ${!!pageToken})`)
+  } while (pageToken && allMessageIds.length < maxResults)
+
+  if (allMessageIds.length === 0) return []
+
+  // Phase 2 : Récupérer les détails de chaque message (en batch de 25 pour performance)
+  const results: GmailMessage[] = []
   const BATCH_SIZE = 25
 
-  for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
-    const batch = messageIds.slice(i, i + BATCH_SIZE)
+  for (let i = 0; i < allMessageIds.length; i += BATCH_SIZE) {
+    const batch = allMessageIds.slice(i, i + BATCH_SIZE)
 
     const batchResults = await Promise.allSettled(
       batch.map(async (msg) => {
-        if (!msg.id) return null
-
         const detail = await gmail.users.messages.get({
           userId: 'me',
           id: msg.id,
@@ -281,15 +331,14 @@ export async function fetchNewEmails(
 
     for (const result of batchResults) {
       if (result.status === 'fulfilled' && result.value) {
-        messages.push(result.value)
+        results.push(result.value)
       } else if (result.status === 'rejected') {
-        // Masquer l'ID dans les logs (RGPD)
         console.error('[Gmail] Failed to fetch message details:', result.reason?.message ?? 'unknown error')
       }
     }
   }
 
-  return messages
+  return results
 }
 
 // ----------------------------------------------------------

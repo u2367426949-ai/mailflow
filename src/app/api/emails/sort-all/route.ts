@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { fetchNewEmails, getOrCreateCategoryLabel, applyLabelToEmail } from '@/lib/gmail'
+import { fetchAllMailboxEmails, getOrCreateCategoryLabel, applyLabelToEmail } from '@/lib/gmail'
 import { classifyEmail } from '@/lib/openai'
 import { getUserIdFromRequest } from '@/lib/auth'
 
@@ -205,8 +205,13 @@ async function processSortJob(userId: string, customRules: string | null) {
   }
 
   try {
-    // Phase 1 : Récupérer les emails Gmail
-    const allEmails = await fetchNewEmails(userId, undefined, MAX_EMAILS)
+    // Phase 1 : Récupérer TOUS les emails de la boîte Gmail (avec pagination)
+    await updateSortJob(userId, { lastError: 'Récupération des emails en cours...' })
+
+    const allEmails = await fetchAllMailboxEmails(userId, MAX_EMAILS, (fetched) => {
+      // Mise à jour du nombre d'emails trouvés pendant la pagination
+      updateSortJob(userId, { totalEmails: fetched }).catch(() => {})
+    })
 
     // Filtrer ceux qu'on a déjà en DB
     const existingIds = new Set(
