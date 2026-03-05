@@ -960,17 +960,59 @@ function ProToolsTab({ emails, stats, user }: {
   const handleApplyRules = async () => {
     if (!extractedRules) return
     try {
-      const res = await fetch('/api/agent/chat', {
+      // Étape 1 : Sauvegarder les règles
+      const saveRes = await fetch('/api/agent/chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rules: extractedRules }),
       })
-      if (res.ok) {
-        setRulesApplied(true)
-        setTimeout(() => setRulesApplied(false), 5000)
+      if (!saveRes.ok) return
+
+      // Étape 2 : Lancer l'application des règles sur les emails existants
+      const applyRes = await fetch('/api/emails/apply-rules', { method: 'POST' })
+      if (applyRes.ok) {
+        setApplyPolling(true)
+        setApplyJob({ status: 'running', startedAt: new Date().toISOString(), completedAt: null, totalEmails: 0, processed: 0, reclassified: 0, relabeled: 0, errors: 0, lastError: null })
       }
     } catch { /* silencieux */ }
   }
+
+  // --- Apply Rules Job state ---
+  interface ApplyJob {
+    status: 'idle' | 'running' | 'completed' | 'error'
+    startedAt: string | null
+    completedAt: string | null
+    totalEmails: number
+    processed: number
+    reclassified: number
+    relabeled: number
+    errors: number
+    lastError: string | null
+  }
+  const [applyJob, setApplyJob] = useState<ApplyJob | null>(null)
+  const [applyPolling, setApplyPolling] = useState(false)
+
+  // Polling de la progression
+  useEffect(() => {
+    if (!applyPolling) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/emails/apply-rules')
+        const data = await res.json()
+        if (data.job) {
+          setApplyJob(data.job)
+          if (data.job.status === 'completed' || data.job.status === 'error' || data.job.status === 'idle') {
+            setApplyPolling(false)
+            if (data.job.status === 'completed') {
+              setRulesApplied(true)
+              setTimeout(() => setRulesApplied(false), 10000)
+            }
+          }
+        }
+      } catch { /* silencieux */ }
+    }, 1500)
+    return () => clearInterval(interval)
+  }, [applyPolling])
 
   // --- Export CSV ---
   const handleExportCSV = () => {
@@ -1128,7 +1170,11 @@ function ProToolsTab({ emails, stats, user }: {
               <span className="text-xs font-semibold text-violet-300 flex items-center gap-1">
                 <Zap className="w-3 h-3" /> Règles suggérées
               </span>
-              {rulesApplied ? (
+              {applyJob?.status === 'running' ? (
+                <span className="text-xs text-blue-400 flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> Application en cours…
+                </span>
+              ) : rulesApplied ? (
                 <span className="text-xs text-emerald-400 flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" /> Appliquées !
                 </span>
@@ -1141,6 +1187,80 @@ function ProToolsTab({ emails, stats, user }: {
                 </button>
               )}
             </div>
+
+            {/* Barre de progression de l'application des règles */}
+            {applyJob?.status === 'running' && (
+              <div className="mb-3 space-y-2">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-[#94949e]">
+                      Re-classification des emails…
+                    </span>
+                    <span className="text-[10px] font-mono text-violet-400">
+                      {applyJob.processed}/{applyJob.totalEmails}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-violet-600 to-indigo-400 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${applyJob.totalEmails > 0 ? Math.round((applyJob.processed / applyJob.totalEmails) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-[#050507] border border-white/[0.06] p-1.5 text-center">
+                    <div className="text-sm font-bold text-violet-400">{applyJob.reclassified}</div>
+                    <div className="text-[9px] text-[#5a5a66]">Reclassifiés</div>
+                  </div>
+                  <div className="rounded-lg bg-[#050507] border border-white/[0.06] p-1.5 text-center">
+                    <div className="text-sm font-bold text-emerald-400">{applyJob.relabeled}</div>
+                    <div className="text-[9px] text-[#5a5a66]">Re-labellisés</div>
+                  </div>
+                  <div className="rounded-lg bg-[#050507] border border-white/[0.06] p-1.5 text-center">
+                    <div className="text-sm font-bold text-red-400">{applyJob.errors}</div>
+                    <div className="text-[9px] text-[#5a5a66]">Erreurs</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Résultat final */}
+            {applyJob?.status === 'completed' && (
+              <div className="mb-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2.5">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-[11px] font-semibold text-emerald-400">Règles appliquées avec succès !</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <div className="text-sm font-bold text-[#f0f0f5]">{applyJob.processed}</div>
+                    <div className="text-[9px] text-[#5a5a66]">Analysés</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-violet-400">{applyJob.reclassified}</div>
+                    <div className="text-[9px] text-[#5a5a66]">Reclassifiés</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-emerald-400">{applyJob.relabeled}</div>
+                    <div className="text-[9px] text-[#5a5a66]">Re-labellisés</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Erreur */}
+            {applyJob?.status === 'error' && (
+              <div className="mb-3 rounded-lg bg-red-500/5 border border-red-500/20 p-2.5">
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                  <span className="text-[11px] text-red-400">{applyJob.lastError ?? 'Erreur inattendue'}</span>
+                </div>
+                {applyJob.processed > 0 && (
+                  <p className="text-[10px] text-[#5a5a66] mt-1">{applyJob.processed} emails traités avant l&apos;erreur.</p>
+                )}
+              </div>
+            )}
+
             <pre className="text-xs text-[#b0b0b8] bg-[#050507] rounded-xl p-2 whitespace-pre-wrap font-mono leading-relaxed border border-white/[0.06]">
               {extractedRules}
             </pre>
