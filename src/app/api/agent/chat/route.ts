@@ -10,6 +10,7 @@ import OpenAI from 'openai'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { getUserIdFromRequest } from '@/lib/auth'
+import { getGmailMessagesTotal } from '@/lib/gmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -139,8 +140,9 @@ export async function POST(request: NextRequest) {
 
   try {
     // Récupérer les stats de la boîte pour le contexte
-    const [emailStats, categoryAgg, recentEmails] = await Promise.all([
-      db.email.count({ where: { userId } }),
+    const [gmailTotal, categoryAgg, recentEmails] = await Promise.all([
+      // Vrai total Gmail (pas limité aux emails en base)
+      getGmailMessagesTotal(userId).catch(() => db.email.count({ where: { userId } })),
       db.email.groupBy({
         by: ['category'],
         where: { userId },
@@ -192,7 +194,7 @@ export async function POST(request: NextRequest) {
     // Appeler OpenAI
     const openai = getOpenAI()
     const systemPrompt = buildAgentSystemPrompt(
-      { total: emailStats, byCategory, topSenders },
+      { total: gmailTotal, byCategory, topSenders },
       currentRules,
       emailSamples
     )
