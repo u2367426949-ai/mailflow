@@ -27,15 +27,13 @@ import {
   Inbox,
   Users,
   Filter,
-  Send,
-  Bot,
-  Sparkles,
   RotateCcw,
   Trash2,
   AlertTriangle,
 } from 'lucide-react'
 import { EmailList } from '@/components/EmailList'
 import { StatsCard, StatsGrid } from '@/components/StatsCard'
+import { MailAgent } from '@/components/MailAgent'
 import type { EmailItem } from '@/components/EmailList'
 import type { EmailCategory } from '@/components/CategoryBadge'
 
@@ -903,117 +901,6 @@ function ProToolsTab({ emails, stats, user }: {
     setResetting(false)
   }
 
-  // --- Agent IA Chat ---
-  interface ChatMessage {
-    role: 'user' | 'assistant'
-    content: string
-  }
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState('')
-  const [chatLoading, setChatLoading] = useState(false)
-  const [extractedRules, setExtractedRules] = useState<string | null>(null)
-  const [rulesApplied, setRulesApplied] = useState(false)
-  const chatEndRef = useRef<HTMLDivElement>(null)
-
-  // Auto-scroll au dernier message
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
-
-  // Envoyer le premier message d'accueil quand isPro devient true
-  useEffect(() => {
-    if (!isPro || chatMessages.length > 0) return
-    handleSendChat('Analyse ma boîte mail et propose-moi directement des règles de tri adaptées à mes emails.')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPro])
-
-  const handleSendChat = async (overrideMsg?: string) => {
-    const msg = overrideMsg ?? chatInput.trim()
-    if (!msg || chatLoading) return
-    if (!overrideMsg) setChatInput('')
-
-    const newMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: msg }]
-    setChatMessages(newMessages)
-    setChatLoading(true)
-
-    try {
-      const res = await fetch('/api/agent/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
-      })
-      const data = await res.json()
-      if (data.reply) {
-        setChatMessages([...newMessages, { role: 'assistant', content: data.reply }])
-      }
-      if (data.extractedRules) {
-        setExtractedRules(data.extractedRules)
-        setRulesApplied(false)
-      }
-    } catch {
-      setChatMessages([...newMessages, { role: 'assistant', content: 'Désolé, une erreur est survenue. Réessaie !' }])
-    } finally {
-      setChatLoading(false)
-    }
-  }
-
-  const handleApplyRules = async () => {
-    if (!extractedRules) return
-    try {
-      // Étape 1 : Sauvegarder les règles
-      const saveRes = await fetch('/api/agent/chat', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rules: extractedRules }),
-      })
-      if (!saveRes.ok) return
-
-      // Étape 2 : Lancer l'application des règles sur les emails existants
-      const applyRes = await fetch('/api/emails/apply-rules', { method: 'POST' })
-      if (applyRes.ok) {
-        setApplyPolling(true)
-        setApplyJob({ status: 'running', startedAt: new Date().toISOString(), completedAt: null, totalEmails: 0, processed: 0, reclassified: 0, relabeled: 0, errors: 0, lastError: null })
-      }
-    } catch { /* silencieux */ }
-  }
-
-  // --- Apply Rules Job state ---
-  interface ApplyJob {
-    status: 'idle' | 'running' | 'completed' | 'error'
-    startedAt: string | null
-    completedAt: string | null
-    totalEmails: number
-    processed: number
-    reclassified: number
-    relabeled: number
-    errors: number
-    lastError: string | null
-  }
-  const [applyJob, setApplyJob] = useState<ApplyJob | null>(null)
-  const [applyPolling, setApplyPolling] = useState(false)
-
-  // Polling de la progression
-  useEffect(() => {
-    if (!applyPolling) return
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/emails/apply-rules')
-        const data = await res.json()
-        if (data.job) {
-          setApplyJob(data.job)
-          if (data.job.status === 'completed' || data.job.status === 'error' || data.job.status === 'idle') {
-            setApplyPolling(false)
-            if (data.job.status === 'completed') {
-              setRulesApplied(true)
-              setTimeout(() => setRulesApplied(false), 10000)
-            }
-          }
-        }
-      } catch { /* silencieux */ }
-    }, 1500)
-    return () => clearInterval(interval)
-  }, [applyPolling])
-
   // --- Export CSV ---
   const handleExportCSV = () => {
     const headers = ['Date', 'Expéditeur', 'Sujet', 'Catégorie', 'Confiance', 'Lu']
@@ -1110,184 +997,6 @@ function ProToolsTab({ emails, stats, user }: {
             Passer à Pro — 14j gratuits
           </Link>
         )}
-      </div>
-
-      {/* --- Agent IA — Chat conversationnel --- */}
-      <div className="relative rounded-2xl border border-violet-500/20 bg-violet-500/5 p-6">
-        {!isPro && <LockedOverlay />}
-
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
-            <Bot className="w-4 h-4 text-violet-400" />
-          </div>
-          <div>
-            <h3 className="text-[#f0f0f5] font-semibold text-sm">Mon Agent IA</h3>
-            <p className="text-xs text-[#5a5a66]">Conversez pour personnaliser votre tri</p>
-          </div>
-        </div>
-
-        {/* Chat messages */}
-        <div className="h-64 overflow-y-auto rounded-xl bg-[#050507] border border-white/[0.06] p-3 mb-3 space-y-3 scroll-smooth">
-          {chatMessages.length === 0 && !chatLoading && (
-            <p className="text-xs text-[#3d3d44] text-center mt-20">L&apos;agent va analyser votre boîte mail…</p>
-          )}
-          {chatMessages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
-                  m.role === 'user'
-                    ? 'bg-indigo-600/60 text-[#f0f0f5]'
-                    : 'bg-white/[0.03] border border-violet-500/20 text-[#c8c8d0]'
-                }`}
-              >
-                {m.role === 'assistant' && (
-                  <span className="flex items-center gap-1 text-violet-400 text-xs font-semibold mb-1">
-                    <Bot className="w-3 h-3" /> Agent IA
-                  </span>
-                )}
-                <p className="whitespace-pre-wrap">{m.content}</p>
-              </div>
-            </div>
-          ))}
-          {chatLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white/[0.03] border border-violet-500/20 rounded-xl px-3 py-2 text-sm text-[#5a5a66]">
-                <span className="flex items-center gap-2">
-                  <Bot className="w-3 h-3 text-violet-400 animate-pulse" />
-                  <span className="animate-pulse">Analyse en cours…</span>
-                </span>
-              </div>
-            </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Règles extraites */}
-        {extractedRules && (
-          <div className="mb-3 rounded-xl bg-violet-500/5 border border-violet-500/20 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-violet-300 flex items-center gap-1">
-                <Zap className="w-3 h-3" /> Règles suggérées
-              </span>
-              {applyJob?.status === 'running' ? (
-                <span className="text-xs text-blue-400 flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 animate-spin" /> Application en cours…
-                </span>
-              ) : rulesApplied ? (
-                <span className="text-xs text-emerald-400 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Appliquées !
-                </span>
-              ) : (
-                <button
-                  onClick={handleApplyRules}
-                  className="text-xs px-2.5 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded-xl transition-colors font-semibold"
-                >
-                  Appliquer ces règles
-                </button>
-              )}
-            </div>
-
-            {/* Barre de progression de l'application des règles */}
-            {applyJob?.status === 'running' && (
-              <div className="mb-3 space-y-2">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-[#94949e]">
-                      Re-classification des emails…
-                    </span>
-                    <span className="text-[10px] font-mono text-violet-400">
-                      {applyJob.processed}/{applyJob.totalEmails}
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-violet-600 to-indigo-400 rounded-full transition-all duration-500 ease-out"
-                      style={{ width: `${applyJob.totalEmails > 0 ? Math.round((applyJob.processed / applyJob.totalEmails) * 100) : 0}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-lg bg-[#050507] border border-white/[0.06] p-1.5 text-center">
-                    <div className="text-sm font-bold text-violet-400">{applyJob.reclassified}</div>
-                    <div className="text-[9px] text-[#5a5a66]">Reclassifiés</div>
-                  </div>
-                  <div className="rounded-lg bg-[#050507] border border-white/[0.06] p-1.5 text-center">
-                    <div className="text-sm font-bold text-emerald-400">{applyJob.relabeled}</div>
-                    <div className="text-[9px] text-[#5a5a66]">Re-labellisés</div>
-                  </div>
-                  <div className="rounded-lg bg-[#050507] border border-white/[0.06] p-1.5 text-center">
-                    <div className="text-sm font-bold text-red-400">{applyJob.errors}</div>
-                    <div className="text-[9px] text-[#5a5a66]">Erreurs</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Résultat final */}
-            {applyJob?.status === 'completed' && (
-              <div className="mb-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2.5">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-[11px] font-semibold text-emerald-400">Règles appliquées avec succès !</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <div className="text-sm font-bold text-[#f0f0f5]">{applyJob.processed}</div>
-                    <div className="text-[9px] text-[#5a5a66]">Analysés</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-violet-400">{applyJob.reclassified}</div>
-                    <div className="text-[9px] text-[#5a5a66]">Reclassifiés</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-emerald-400">{applyJob.relabeled}</div>
-                    <div className="text-[9px] text-[#5a5a66]">Re-labellisés</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Erreur */}
-            {applyJob?.status === 'error' && (
-              <div className="mb-3 rounded-lg bg-red-500/5 border border-red-500/20 p-2.5">
-                <div className="flex items-center gap-1.5">
-                  <AlertCircle className="w-3.5 h-3.5 text-red-400" />
-                  <span className="text-[11px] text-red-400">{applyJob.lastError ?? 'Erreur inattendue'}</span>
-                </div>
-                {applyJob.processed > 0 && (
-                  <p className="text-[10px] text-[#5a5a66] mt-1">{applyJob.processed} emails traités avant l&apos;erreur.</p>
-                )}
-              </div>
-            )}
-
-            <pre className="text-xs text-[#b0b0b8] bg-[#050507] rounded-xl p-2 whitespace-pre-wrap font-mono leading-relaxed border border-white/[0.06]">
-              {extractedRules}
-            </pre>
-          </div>
-        )}
-
-        {/* Input bar */}
-        <form
-          onSubmit={(e) => { e.preventDefault(); handleSendChat() }}
-          className="flex items-center gap-2"
-        >
-          <input
-            type="text"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            disabled={chatLoading || !isPro}
-            placeholder="Ex : Mets les emails LinkedIn en Newsletter…"
-            className="flex-1 px-3 py-2 bg-[#050507] border border-white/[0.06] rounded-xl text-sm text-[#f0f0f5] placeholder-[#3d3d44] focus:outline-none focus:border-violet-500/50 disabled:opacity-40 transition-colors"
-          />
-          <button
-            type="submit"
-            disabled={chatLoading || !chatInput.trim() || !isPro}
-            className="p-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white transition-colors"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
       </div>
 
       {/* --- Tri boîte mail entière --- */}
@@ -1880,6 +1589,15 @@ function DashboardContent() {
           <SettingsTab user={user} />
         )}
       </main>
+
+      {/* ── Agent IA flottant (bas-droite) — Pro only ── */}
+      <MailAgent
+        isPro={user?.plan === 'pro' || user?.plan === 'business'}
+        onUpgrade={() => {
+          setActiveTab('billing')
+          window.history.replaceState({}, '', '/dashboard?tab=billing')
+        }}
+      />
     </div>
   )
 }
