@@ -86,7 +86,7 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
         const data = await res.json()
         if (data.job) {
           setApplyJob(data.job)
-          if (['completed', 'error', 'idle'].includes(data.job.status)) {
+          if (data.job.status === 'completed' || data.job.status === 'error') {
             setApplyPolling(false)
             if (data.job.status === 'completed') {
               setRulesApplied(true)
@@ -130,21 +130,36 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
     }
   }, [messages, input, loading, open])
 
+  const [applyError, setApplyError] = useState<string | null>(null)
+
   const handleApplyRules = async () => {
     if (!extractedRules) return
+    setApplyError(null)
     try {
+      // 1. Sauvegarder les règles dans les settings utilisateur
       const saveRes = await fetch('/api/agent/chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rules: extractedRules }),
       })
-      if (!saveRes.ok) return
-      const applyRes = await fetch('/api/emails/apply-rules', { method: 'POST' })
-      if (applyRes.ok) {
-        setApplyPolling(true)
-        setApplyJob({ status: 'running', totalEmails: 0, processed: 0, reclassified: 0, relabeled: 0, errors: 0, lastError: null })
+      if (!saveRes.ok) {
+        const err = await saveRes.json().catch(() => ({}))
+        setApplyError(err.error ?? 'Impossible de sauvegarder les règles')
+        return
       }
-    } catch { /* silencieux */ }
+
+      // 2. Lancer l'application sur tous les emails
+      const applyRes = await fetch('/api/emails/apply-rules', { method: 'POST' })
+      const applyData = await applyRes.json().catch(() => ({}))
+      if (!applyRes.ok) {
+        setApplyError(applyData.error ?? 'Impossible de lancer l\'application')
+        return
+      }
+      setApplyPolling(true)
+      setApplyJob({ status: 'running', totalEmails: 0, processed: 0, reclassified: 0, relabeled: 0, errors: 0, lastError: null })
+    } catch (e) {
+      setApplyError('Erreur réseau — réessaie')
+    }
   }
 
   // Suggestions rapides
@@ -363,7 +378,15 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
             </div>
           )}
 
-          {/* Erreur */}
+          {/* Erreur apply */}
+          {applyError && (
+            <div className="flex items-center gap-1 text-[10px] text-red-400 mt-1">
+              <AlertCircle className="w-3 h-3 flex-shrink-0" />
+              {applyError}
+            </div>
+          )}
+
+          {/* Erreur job */}
           {applyJob?.status === 'error' && (
             <div className="flex items-center gap-1 text-[10px] text-red-400">
               <AlertCircle className="w-3 h-3" />
