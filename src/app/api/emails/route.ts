@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
   }
 
   // --- Liste ---
-  const limit = Math.min(parseInt(searchParams.get('limit') ?? '50', 10), 200)
+  const limit = Math.min(parseInt(searchParams.get('limit') ?? '50', 10), 2000)
   const offset = parseInt(searchParams.get('offset') ?? '0', 10)
   const category = searchParams.get('category')
   const fromDate = searchParams.get('fromDate')

@@ -74,7 +74,7 @@ function useDashboardData() {
 
   const fetchEmails = useCallback(async () => {
     try {
-      const res = await fetch('/api/emails?limit=50')
+      const res = await fetch('/api/emails?limit=500')
       if (!res.ok) throw new Error('Failed to fetch emails')
       const data = await res.json()
       setEmails(
