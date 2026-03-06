@@ -200,6 +200,15 @@ export async function getGmailClient(userId: string) {
 }
 
 // ----------------------------------------------------------
+// Récupérer le nombre total de messages dans la boîte Gmail
+// ----------------------------------------------------------
+export async function getGmailMessagesTotal(userId: string): Promise<number> {
+  const gmail = await getGmailClient(userId)
+  const { data } = await gmail.users.getProfile({ userId: 'me' })
+  return data.messagesTotal ?? 0
+}
+
+// ----------------------------------------------------------
 // Récupérer les nouveaux emails depuis la dernière sync
 // ----------------------------------------------------------
 export async function fetchNewEmails(

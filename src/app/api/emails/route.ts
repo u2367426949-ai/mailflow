@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { subDays } from 'date-fns'
 import { getUserIdFromRequest } from '@/lib/auth'
+import { getGmailMessagesTotal } from '@/lib/gmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,17 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const type = searchParams.get('type')
+
+  // --- Total Gmail (vrai compte depuis l'API Google) ---
+  if (type === 'gmail-total') {
+    try {
+      const messagesTotal = await getGmailMessagesTotal(userId)
+      return NextResponse.json({ messagesTotal })
+    } catch (err) {
+      console.error('[Emails] Gmail total error:', err)
+      return NextResponse.json({ error: 'Failed to fetch Gmail total' }, { status: 500 })
+    }
+  }
 
   // --- Stats ---
   if (type === 'stats') {

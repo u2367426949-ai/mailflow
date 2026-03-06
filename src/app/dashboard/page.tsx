@@ -82,11 +82,20 @@ function useDashboardData() {
           receivedAt: new Date(e.receivedAt),
         }))
       )
-      // total = vrai nombre d'emails en base (non paginé)
+      // total BDD (non paginé)
       if (typeof data.total === 'number') setTotalEmails(data.total)
     } catch (err) {
       console.error('[Dashboard] Error fetching emails:', err)
     }
+  }, [])
+
+  const fetchGmailTotal = useCallback(async () => {
+    try {
+      const res = await fetch('/api/emails?type=gmail-total')
+      if (!res.ok) return
+      const data = await res.json()
+      if (typeof data.messagesTotal === 'number') setTotalEmails(data.messagesTotal)
+    } catch {}
   }, [])
 
   const fetchStats = useCallback(async () => {
@@ -116,7 +125,9 @@ function useDashboardData() {
     await Promise.all([fetchEmails(), fetchStats(), fetchUser()])
     setLastSyncedAt(new Date())
     setLoading(false)
-  }, [fetchEmails, fetchStats, fetchUser])
+    // Charger le vrai total Gmail en arrière-plan (appel API Google, légèrement plus lent)
+    fetchGmailTotal()
+  }, [fetchEmails, fetchStats, fetchUser, fetchGmailTotal])
 
   useEffect(() => {
     load()
