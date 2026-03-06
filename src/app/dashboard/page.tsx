@@ -65,6 +65,7 @@ interface UserSession {
 // ----------------------------------------------------------
 function useDashboardData() {
   const [emails, setEmails] = useState<EmailItem[]>([])
+  const [totalEmails, setTotalEmails] = useState<number>(0)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [user, setUser] = useState<UserSession | null>(null)
   const [loading, setLoading] = useState(true)
@@ -83,6 +84,8 @@ function useDashboardData() {
           receivedAt: new Date(e.receivedAt),
         }))
       )
+      // total = vrai nombre d'emails en base (non paginé)
+      if (typeof data.total === 'number') setTotalEmails(data.total)
     } catch (err) {
       console.error('[Dashboard] Error fetching emails:', err)
     }
@@ -162,7 +165,7 @@ function useDashboardData() {
     )
   }
 
-  return { emails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser }
+  return { emails, totalEmails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser }
 }
 
 // ----------------------------------------------------------
@@ -1340,7 +1343,7 @@ function ProToolsTab({ emails, stats, user }: {
 // Page Dashboard principale
 // ----------------------------------------------------------
 function DashboardContent() {
-  const { emails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser } = useDashboardData()
+  const { emails, totalEmails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser } = useDashboardData()
   const searchParams = useSearchParams()
   const tabFromUrl = searchParams.get('tab')
   const checkoutStatus = searchParams.get('checkout')
@@ -1453,12 +1456,12 @@ function DashboardContent() {
         {/* Stats rapides */}
         <StatsGrid columns={4} className="mb-6">
           <StatsCard
-            title="Emails traités"
-            value={loading ? '—' : (stats?.totalProcessed ?? 0).toLocaleString()}
+            title="Total boîte mail"
+            value={loading ? '—' : totalEmails.toLocaleString()}
             icon={Mail}
             iconColor="text-blue-400"
             loading={loading}
-            subtitle="Total depuis l'activation"
+            subtitle={`${(stats?.totalProcessed ?? 0).toLocaleString()} classifiés par l'IA`}
           />
           <StatsCard
             title="Précision IA"

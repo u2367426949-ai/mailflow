@@ -146,11 +146,11 @@ export async function POST(request: NextRequest) {
         where: { userId },
         _count: { id: true },
       }),
-      // Échantillon de 100 emails récents pour donner du contexte concret à l'agent
+      // Échantillon de 30 emails récents pour donner du contexte concret à l'agent
       db.email.findMany({
         where: { userId },
         select: { from: true, subject: true, category: true },
-        take: 100,
+        take: 30,
         orderBy: { receivedAt: 'desc' },
       }),
     ])
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     const topSendersRaw = await db.email.findMany({
       where: { userId },
       select: { from: true },
-      take: 2000,
+      take: 500,
       orderBy: { receivedAt: 'desc' },
     })
 
