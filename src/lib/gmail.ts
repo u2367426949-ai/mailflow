@@ -402,6 +402,45 @@ export async function applyLabelToEmail(
 }
 
 // ----------------------------------------------------------
+// Déplacer un email : ajouter le label catégorie + retirer de INBOX
+// Gère les cas spéciaux (spam → SPAM, etc.)
+// ----------------------------------------------------------
+export async function moveEmail(
+  userId: string,
+  gmailMessageId: string,
+  categoryLabelId: string,
+  categorySlug: string
+): Promise<void> {
+  const gmail = await getGmailClient(userId)
+
+  // Construire les labels à ajouter / retirer
+  const addLabelIds: string[] = [categoryLabelId]
+  const removeLabelIds: string[] = ['INBOX'] // Retirer de l'inbox par défaut
+
+  // Cas spéciaux
+  if (categorySlug === 'spam') {
+    // Déplacer vers le dossier Spam Gmail natif
+    addLabelIds.push('SPAM')
+  } else if (categorySlug === 'urgent') {
+    // Les urgents restent dans l'inbox + marqués importants
+    removeLabelIds.length = 0 // NE PAS retirer de l'inbox
+    addLabelIds.push('IMPORTANT')
+  } else if (categorySlug === 'personal') {
+    // Les persos restent dans l'inbox
+    removeLabelIds.length = 0
+  }
+
+  await gmail.users.messages.modify({
+    userId: 'me',
+    id: gmailMessageId,
+    requestBody: {
+      addLabelIds,
+      removeLabelIds,
+    },
+  })
+}
+
+// ----------------------------------------------------------
 // Obtenir ou créer le label Gmail pour une catégorie MailFlow
 // ----------------------------------------------------------
 

@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { fetchNewEmails, getOrCreateCategoryLabel, applyLabelToEmail } from '@/lib/gmail'
+import { fetchNewEmails, getOrCreateCategoryLabel, moveEmail } from '@/lib/gmail'
 import { classifyEmail } from '@/lib/openai'
 import { rateLimit, RATE_LIMIT_CONFIGS, getClientIpFromHeaders } from '@/lib/rateLimit'
 import type { Plan } from '@prisma/client'
@@ -99,12 +99,12 @@ async function processEmail(
       },
     })
 
-    // Appliquer le label Gmail si la confiance est suffisante
+    // Labelliser + déplacer dans Gmail si la confiance est suffisante
     if (classification.confidence >= 0.6 && classification.category !== 'unknown') {
       try {
         const labelId = await getOrCreateCategoryLabel(userId, classification.category)
         if (labelId) {
-          await applyLabelToEmail(userId, gmailEmail.id, labelId)
+          await moveEmail(userId, gmailEmail.id, labelId, classification.category)
 
           await db.email.update({
             where: { id: savedEmail.id },
@@ -114,7 +114,7 @@ async function processEmail(
       } catch (labelErr) {
         // Erreur de labelling non bloquante — l'email est quand même sauvegardé
         const msg = labelErr instanceof Error ? labelErr.message : 'unknown error'
-        console.error(`[Process] Failed to apply label (non-blocking):`, msg)
+        console.error(`[Process] Failed to move email (non-blocking):`, msg)
       }
     }
 

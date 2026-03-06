@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { classifyEmail } from '@/lib/openai'
-import { getOrCreateCategoryLabel, applyLabelToEmail } from '@/lib/gmail'
+import { getOrCreateCategoryLabel, moveEmail } from '@/lib/gmail'
 import { getUserIdFromRequest } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
@@ -237,13 +237,13 @@ async function processApplyRulesJob(userId: string, customRules: string) {
               },
             })
 
-            // Re-labelliser dans Gmail si confiance suffisante
+            // Re-labelliser + déplacer dans Gmail si confiance suffisante
             let labeled = false
             if (newClassification.confidence >= 0.6 && newClassification.category !== 'unknown') {
               try {
                 const labelId = await getCachedLabel(newClassification.category)
                 if (labelId) {
-                  await applyLabelToEmail(userId, email.gmailId, labelId)
+                  await moveEmail(userId, email.gmailId, labelId, newClassification.category)
                   await db.email.update({
                     where: { id: email.id },
                     data: { isLabeled: true },

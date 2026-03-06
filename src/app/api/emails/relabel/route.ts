@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getOrCreateCategoryLabel, applyLabelToEmail } from '@/lib/gmail'
+import { getOrCreateCategoryLabel, moveEmail } from '@/lib/gmail'
 import { getUserIdFromRequest } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       try {
         const labelId = await getOrCreateCategoryLabel(userId, email.category)
         if (labelId) {
-          await applyLabelToEmail(userId, email.gmailId, labelId)
+          await moveEmail(userId, email.gmailId, labelId, email.category)
           await db.email.update({
             where: { id: email.id },
             data: { isLabeled: true },

@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
-import { fetchAllMailboxEmails, getOrCreateCategoryLabel, applyLabelToEmail } from '@/lib/gmail'
+import { fetchAllMailboxEmails, getOrCreateCategoryLabel, moveEmail } from '@/lib/gmail'
 import { classifyEmail } from '@/lib/openai'
 import { getUserIdFromRequest } from '@/lib/auth'
 
@@ -321,7 +321,7 @@ async function processSortJob(userId: string, customRules: string | null) {
         }
       }
 
-      // --- Étape C : Labelliser dans Gmail en parallèle (par slots de CONCURRENCY) ---
+      // --- Étape C : Labelliser + déplacer dans Gmail en parallèle (par slots de CONCURRENCY) ---
       const toLabel = savedEmails.filter(
         (e) => e.confidence >= 0.6 && e.category !== 'unknown'
       )
@@ -332,7 +332,7 @@ async function processSortJob(userId: string, customRules: string | null) {
           slot.map(async (e) => {
             const labelId = await getCachedLabel(e.category)
             if (!labelId) return false
-            await applyLabelToEmail(userId, e.gmailId, labelId)
+            await moveEmail(userId, e.gmailId, labelId, e.category)
             await db.email.update({
               where: { id: e.dbId },
               data: { isLabeled: true },
