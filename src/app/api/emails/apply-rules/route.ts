@@ -129,17 +129,21 @@ export async function POST(request: NextRequest) {
     lastError: null,
   })
 
-  // Lancer en arrière-plan
-  processApplyRulesJob(userId, customRules).catch((err) => {
+  // Traitement SYNCHRONE (Vercel tue les background jobs après la réponse)
+  try {
+    await processApplyRulesJob(userId, customRules)
+  } catch (err) {
     console.error('[ApplyRules] Fatal error:', err)
-    updateApplyJob(userId, {
+    await updateApplyJob(userId, {
       status: 'error',
       lastError: err instanceof Error ? err.message : 'Erreur inattendue',
       completedAt: new Date().toISOString(),
     })
-  })
+    return NextResponse.json({ error: 'Erreur durant l\'application des règles' }, { status: 500 })
+  }
 
-  return NextResponse.json({ success: true, message: 'Application des règles lancée' })
+  const finalJob = await getApplyJob(userId)
+  return NextResponse.json({ success: true, job: finalJob })
 }
 
 // ----------------------------------------------------------

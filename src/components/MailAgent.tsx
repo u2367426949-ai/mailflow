@@ -50,7 +50,6 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
   const [extractedRules, setExtractedRules] = useState<string | null>(null)
   const [rulesApplied, setRulesApplied] = useState(false)
   const [applyJob, setApplyJob] = useState<ApplyJob | null>(null)
-  const [applyPolling, setApplyPolling] = useState(false)
   const [unreadDot, setUnreadDot] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -76,28 +75,6 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
     sendMessage('Analyse ma boîte mail et donne-moi un bilan complet : volume d\'emails, newsletters indésirables, expéditeurs récurrents, et propose-moi des actions concrètes.')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isPro])
-
-  // Polling apply-rules
-  useEffect(() => {
-    if (!applyPolling) return
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/emails/apply-rules')
-        const data = await res.json()
-        if (data.job) {
-          setApplyJob(data.job)
-          if (data.job.status === 'completed' || data.job.status === 'error') {
-            setApplyPolling(false)
-            if (data.job.status === 'completed') {
-              setRulesApplied(true)
-              setTimeout(() => setRulesApplied(false), 8000)
-            }
-          }
-        }
-      } catch { /* silencieux */ }
-    }, 1500)
-    return () => clearInterval(interval)
-  }, [applyPolling])
 
   const sendMessage = useCallback(async (overrideMsg?: string) => {
     const msg = overrideMsg ?? input.trim()
@@ -148,17 +125,28 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
         return
       }
 
-      // 2. Lancer l'application sur tous les emails
+      // 2. Lancer l'application (synchrone côté serveur — on attend la fin)
+      setApplyJob({ status: 'running', totalEmails: 0, processed: 0, reclassified: 0, relabeled: 0, errors: 0, lastError: null })
       const applyRes = await fetch('/api/emails/apply-rules', { method: 'POST' })
       const applyData = await applyRes.json().catch(() => ({}))
       if (!applyRes.ok) {
-        setApplyError(applyData.error ?? 'Impossible de lancer l\'application')
+        setApplyError(applyData.error ?? 'Impossible d\'appliquer les règles')
+        setApplyJob(null)
         return
       }
-      setApplyPolling(true)
-      setApplyJob({ status: 'running', totalEmails: 0, processed: 0, reclassified: 0, relabeled: 0, errors: 0, lastError: null })
-    } catch (e) {
+      // La réponse contient le job final (completed ou error)
+      if (applyData.job) {
+        setApplyJob(applyData.job)
+        if (applyData.job.status === 'completed') {
+          setRulesApplied(true)
+          setTimeout(() => setRulesApplied(false), 8000)
+        } else if (applyData.job.status === 'error') {
+          setApplyError(applyData.job.lastError ?? 'Erreur durant l\'application')
+        }
+      }
+    } catch {
       setApplyError('Erreur réseau — réessaie')
+      setApplyJob(null)
     }
   }
 
@@ -342,7 +330,7 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
             {applyJob?.status === 'running' ? (
               <span className="text-[10px] text-blue-400 flex items-center gap-1">
                 <RefreshCw className="w-3 h-3 animate-spin" />
-                {applyJob.processed}/{applyJob.totalEmails}
+                En cours…
               </span>
             ) : rulesApplied ? (
               <span className="text-[10px] text-emerald-400 flex items-center gap-1">
