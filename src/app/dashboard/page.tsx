@@ -64,6 +64,7 @@ interface UserSession {
 function useDashboardData() {
   const [emails, setEmails] = useState<EmailItem[]>([])
   const [totalEmails, setTotalEmails] = useState<number>(0)
+  const [gmailTotal, setGmailTotal] = useState<number>(0)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [user, setUser] = useState<UserSession | null>(null)
   const [loading, setLoading] = useState(true)
@@ -94,7 +95,7 @@ function useDashboardData() {
       const res = await fetch('/api/emails?type=gmail-total')
       if (!res.ok) return
       const data = await res.json()
-      if (typeof data.messagesTotal === 'number') setTotalEmails(data.messagesTotal)
+      if (typeof data.messagesTotal === 'number') setGmailTotal(data.messagesTotal)
     } catch {}
   }, [])
 
@@ -197,7 +198,7 @@ function useDashboardData() {
     setLastSyncedAt(new Date())
   }, [fetchEmails, fetchStats])
 
-  return { emails, totalEmails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser, refreshData }
+  return { emails, totalEmails: gmailTotal || totalEmails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser, refreshData }
 }
 
 // ----------------------------------------------------------
