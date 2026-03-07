@@ -8,6 +8,52 @@ import { OAuth2Client } from 'google-auth-library'
 import { db } from './db'
 
 // ----------------------------------------------------------
+// Throttle Gmail API : limite le débit et retry sur 429
+// Gmail quota = 250 queries/min/user. On se limite à ~150/min.
+// ----------------------------------------------------------
+const GMAIL_MIN_DELAY_MS = 400 // ~150 req/min max
+const GMAIL_MAX_RETRIES = 3
+const userLastCall = new Map<string, number>()
+
+async function gmailThrottle(userId: string): Promise<void> {
+  const now = Date.now()
+  const last = userLastCall.get(userId) ?? 0
+  const wait = GMAIL_MIN_DELAY_MS - (now - last)
+  if (wait > 0) {
+    await new Promise((r) => setTimeout(r, wait))
+  }
+  userLastCall.set(userId, Date.now())
+}
+
+function isRateLimitError(err: unknown): boolean {
+  if (err && typeof err === 'object') {
+    const code = (err as { code?: number }).code
+    if (code === 429) return true
+    const message = (err as { message?: string }).message ?? ''
+    if (message.includes('Quota exceeded') || message.includes('Rate Limit')) return true
+  }
+  return false
+}
+
+async function withRetry<T>(fn: () => Promise<T>, userId: string): Promise<T> {
+  for (let attempt = 0; attempt < GMAIL_MAX_RETRIES; attempt++) {
+    try {
+      await gmailThrottle(userId)
+      return await fn()
+    } catch (err) {
+      if (isRateLimitError(err) && attempt < GMAIL_MAX_RETRIES - 1) {
+        const backoff = Math.pow(2, attempt + 1) * 1000 // 2s, 4s, 8s
+        console.warn(`[Gmail] Rate limited for user ${userId}, retrying in ${backoff}ms (attempt ${attempt + 1})`)
+        await new Promise((r) => setTimeout(r, backoff))
+        continue
+      }
+      throw err
+    }
+  }
+  throw new Error('Unreachable')
+}
+
+// ----------------------------------------------------------
 // Types
 // ----------------------------------------------------------
 export interface GmailMessage {
@@ -356,7 +402,10 @@ async function fetchEmails(
 export async function listGmailLabels(userId: string): Promise<GmailLabel[]> {
   const gmail = await getGmailClient(userId)
 
-  const response = await gmail.users.labels.list({ userId: 'me' })
+  const response = await withRetry(
+    () => gmail.users.labels.list({ userId: 'me' }),
+    userId
+  )
   return (response.data.labels ?? []).map((l) => ({
     id: l.id!,
     name: l.name!,
@@ -374,15 +423,18 @@ export async function createGmailLabel(
 ): Promise<GmailLabel> {
   const gmail = await getGmailClient(userId)
 
-  const response = await gmail.users.labels.create({
-    userId: 'me',
-    requestBody: {
-      name,
-      labelListVisibility: 'labelShow',
-      messageListVisibility: 'show',
-      color: color ?? { backgroundColor: '#4a86e8', textColor: '#ffffff' },
-    },
-  })
+  const response = await withRetry(
+    () => gmail.users.labels.create({
+      userId: 'me',
+      requestBody: {
+        name,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+        color: color ?? { backgroundColor: '#4a86e8', textColor: '#ffffff' },
+      },
+    }),
+    userId
+  )
 
   return {
     id: response.data.id!,
@@ -540,28 +592,31 @@ export async function searchGmailMessages(
   const gmail = await getGmailClient(userId)
   const safeMax = Math.min(Math.max(maxResults, 1), 50)
 
-  const listResponse = await gmail.users.messages.list({
-    userId: 'me',
-    q: query,
-    maxResults: safeMax,
-  })
+  const listResponse = await withRetry(
+    () => gmail.users.messages.list({ userId: 'me', q: query, maxResults: safeMax }),
+    userId
+  )
 
   const messages = listResponse.data.messages ?? []
   if (messages.length === 0) return []
 
-  const BATCH = 25
+  // Sequential batches of 5 to respect rate limits
+  const BATCH = 5
   const results: Array<{ id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }> = []
 
   for (let i = 0; i < messages.length; i += BATCH) {
     const batch = messages.slice(i, i + BATCH)
     const settled = await Promise.allSettled(
       batch.map(async (msg) => {
-        const detail = await gmail.users.messages.get({
-          userId: 'me',
-          id: msg.id!,
-          format: 'metadata',
-          metadataHeaders: ['From', 'Subject', 'Date'],
-        })
+        const detail = await withRetry(
+          () => gmail.users.messages.get({
+            userId: 'me',
+            id: msg.id!,
+            format: 'metadata',
+            metadataHeaders: ['From', 'Subject', 'Date'],
+          }),
+          userId
+        )
         const headers = detail.data.payload?.headers ?? []
         const getHeader = (name: string) =>
           headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
@@ -599,14 +654,17 @@ export async function batchModifyGmailMessages(
   const CHUNK = 1000
   for (let i = 0; i < messageIds.length; i += CHUNK) {
     const chunk = messageIds.slice(i, i + CHUNK)
-    await gmail.users.messages.batchModify({
-      userId: 'me',
-      requestBody: {
-        ids: chunk,
-        addLabelIds: addLabelIds.length > 0 ? addLabelIds : undefined,
-        removeLabelIds: removeLabelIds.length > 0 ? removeLabelIds : undefined,
-      },
-    })
+    await withRetry(
+      () => gmail.users.messages.batchModify({
+        userId: 'me',
+        requestBody: {
+          ids: chunk,
+          addLabelIds: addLabelIds.length > 0 ? addLabelIds : undefined,
+          removeLabelIds: removeLabelIds.length > 0 ? removeLabelIds : undefined,
+        },
+      }),
+      userId
+    )
   }
 
   return { modified: messageIds.length }
@@ -626,11 +684,15 @@ export async function trashGmailMessages(
   let trashed = 0
   let errors = 0
 
-  const BATCH = 10
+  // Sequential batches of 3 to respect rate limits
+  const BATCH = 3
   for (let i = 0; i < safeIds.length; i += BATCH) {
     const batch = safeIds.slice(i, i + BATCH)
     const settled = await Promise.allSettled(
-      batch.map((id) => gmail.users.messages.trash({ userId: 'me', id }))
+      batch.map((id) => withRetry(
+        () => gmail.users.messages.trash({ userId: 'me', id }),
+        userId
+      ))
     )
     for (const r of settled) {
       if (r.status === 'fulfilled') trashed++
@@ -650,11 +712,10 @@ export async function getGmailMessageBody(
 ): Promise<{ subject: string; from: string; body: string; snippet: string }> {
   const gmail = await getGmailClient(userId)
 
-  const detail = await gmail.users.messages.get({
-    userId: 'me',
-    id: messageId,
-    format: 'full',
-  })
+  const detail = await withRetry(
+    () => gmail.users.messages.get({ userId: 'me', id: messageId, format: 'full' }),
+    userId
+  )
 
   const headers = detail.data.payload?.headers ?? []
   const getHeader = (name: string) =>

@@ -55,12 +55,12 @@ const agentTools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'search_emails',
-      description: 'Recherche des emails dans la boîte Gmail avec une requête. Syntaxe Gmail : from:, to:, subject:, is:unread, older_than:, newer_than:, has:attachment, label:, etc. Retourne les IDs, expéditeurs, sujets et snippets. TOUJOURS utiliser cette fonction avant de déplacer/supprimer des emails pour obtenir leurs IDs.',
+      description: 'Recherche des emails dans la boîte Gmail avec une requête. Syntaxe Gmail : from:, to:, subject:, is:unread, older_than:, newer_than:, has:attachment, label:, etc. Retourne les IDs, expéditeurs, sujets et snippets. TOUJOURS utiliser cette fonction avant de déplacer/supprimer des emails pour obtenir leurs IDs. IMPORTANT : utilise une SEULE requête combinée quand c\'est possible (ex: "from:a OR from:b") plutôt que plusieurs appels séparés.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Requête de recherche Gmail (ex: "from:amazon.fr", "subject:facture is:unread", "older_than:30d from:newsletter@")' },
-          maxResults: { type: 'number', description: 'Nombre max de résultats (défaut: 20, max: 50)' },
+          query: { type: 'string', description: 'Requête de recherche Gmail (ex: "from:amazon.fr", "subject:facture is:unread", "from:a OR from:b")' },
+          maxResults: { type: 'number', description: 'Nombre max de résultats (défaut: 10, max: 30)' },
         },
         required: ['query'],
       },
@@ -84,7 +84,7 @@ const agentTools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'list_labels',
-      description: 'Lister tous les labels Gmail disponibles dans la boîte mail. Retourne les IDs et noms des labels. Utilise cette fonction pour connaître les labels existants avant d\'en appliquer un.',
+      description: 'Lister tous les labels Gmail disponibles dans la boîte mail. Retourne les IDs et noms des labels. ATTENTION : les labels sont déjà fournis dans ton contexte système. N\'appelle cette fonction QUE si tu as besoin de les rafraîchir après avoir créé un nouveau label.',
       parameters: { type: 'object', properties: {} },
     },
   },
@@ -224,7 +224,7 @@ async function executeTool(
     switch (toolName) {
       case 'search_emails': {
         const query = String(args.query ?? '')
-        const maxResults = Math.min(Number(args.maxResults) || 20, 50)
+        const maxResults = Math.min(Number(args.maxResults) || 10, 30)
         const results = await searchGmailMessages(userId, query, maxResults)
         return JSON.stringify({ found: results.length, emails: results })
       }
@@ -353,6 +353,14 @@ Tu peux exécuter des ACTIONS RÉELLES sur la boîte Gmail de l'utilisateur :
 2. TOUJOURS utiliser list_labels AVANT d'appliquer un label pour vérifier qu'il existe (sinon le créer avec create_label)
 3. Pour les suppressions : TOUJOURS demander confirmation textuelle à l'utilisateur AVANT d'appeler trash_emails
 4. Après une action, résume ce que tu as fait de manière claire et concise
+
+⚡ OPTIMISATION DES APPELS API (CRITIQUE) :
+- Les appels Gmail sont limités en débit. Tu dois être EFFICIENT :
+- Combine les recherches : utilise "from:a OR from:b" plutôt que 2 appels search_emails séparés
+- Les labels sont déjà listés dans ton contexte système : NE PAS appeler list_labels sauf après create_label
+- Limite les résultats de recherche (maxResults: 10 suffit généralement)
+- Utilise batchModify (move_emails, apply_label) au lieu de traiter les emails un par un
+- Si une erreur "Quota exceeded" apparaît, STOP : dis à l'utilisateur d'attendre 1 minute et de réessayer
 
 🚫 RÈGLES DE SÉCURITÉ :
 - Ne JAMAIS supprimer (trash) sans confirmation explicite de l'utilisateur
@@ -508,7 +516,8 @@ export async function POST(request: NextRequest) {
 
     // ── Boucle de function calling ─────────────────────────
     const executedActions: AgentAction[] = []
-    const MAX_TURNS = 8
+    const MAX_TURNS = 6
+    let hitRateLimit = false
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const completion = await openai.chat.completions.create({
@@ -532,7 +541,7 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      // Exécuter chaque tool call
+      // Exécuter chaque tool call (avec délai entre chaque pour respecter le quota)
       for (const toolCall of assistantMsg.tool_calls) {
         let args: Record<string, unknown> = {}
         try {
@@ -543,11 +552,17 @@ export async function POST(request: NextRequest) {
 
         console.log(`[Agent] Tool call: ${toolCall.function.name}`, JSON.stringify(args).substring(0, 200))
         const result = await executeTool(userId, toolCall.function.name, args)
+        const parsed = JSON.parse(result)
+
+        // Détecter si on a hit la rate limit
+        if (parsed.error && typeof parsed.error === 'string' && parsed.error.includes('Quota exceeded')) {
+          hitRateLimit = true
+        }
 
         executedActions.push({
           tool: toolCall.function.name,
           args,
-          result: JSON.parse(result),
+          result: parsed,
         })
 
         // Ajouter le résultat du tool à la conversation
@@ -557,6 +572,9 @@ export async function POST(request: NextRequest) {
           content: result,
         })
       }
+
+      // Si on a touché la rate limit, on sort de la boucle pour éviter d'aggraver
+      if (hitRateLimit) break
     }
 
     // ── Extraire la réponse finale ─────────────────────────
@@ -570,9 +588,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (!reply) {
-      reply = executedActions.length > 0
-        ? 'Actions exécutées avec succès.'
-        : 'Désolé, je n\'ai pas pu répondre.'
+      if (hitRateLimit) {
+        reply = '⚠️ La limite de requêtes Gmail a été atteinte. Les actions déjà effectuées ont été appliquées. Attends environ 1 minute puis relance ta demande — je reprendrai là où je me suis arrêté.'
+      } else {
+        reply = executedActions.length > 0
+          ? 'Actions exécutées avec succès.'
+          : 'Désolé, je n\'ai pas pu répondre.'
+      }
+    } else if (hitRateLimit && !reply.includes('limite') && !reply.includes('quota')) {
+      reply += '\n\n⚠️ Note : la limite de requêtes Gmail a été atteinte en cours de route. Attends ~1 minute et relance si certaines actions n\'ont pas pu être complétées.'
     }
 
     // Extraire les règles si présentes (compatibilité existante)
