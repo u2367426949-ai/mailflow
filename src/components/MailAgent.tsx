@@ -83,11 +83,20 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
     }
   }, [open])
 
-  // Message de bienvenue + analyse auto dès l'ouverture (1 fois)
+  // Message de bienvenue dès l'ouverture (1 fois)
   useEffect(() => {
     if (!open || !isPro || initialized.current || messages.length > 0) return
     initialized.current = true
-    sendMessage('Analyse ma boîte mail et donne-moi un bilan complet : volume d\'emails, newsletters indésirables, expéditeurs récurrents, et propose-moi des actions concrètes.')
+    setMessages([{
+      role: 'assistant',
+      content: `👋 Salut ! Je suis ton assistant Gmail. Voici ce que je peux faire pour toi :\n\n` +
+        `🔍 **Rechercher** — Trouver des emails par expéditeur, sujet, date, label…\n` +
+        `📖 **Lire** — Afficher le contenu complet d'un email\n` +
+        `🏷️ **Organiser** — Créer des labels, déplacer, archiver, classer par catégorie\n` +
+        `🗑️ **Nettoyer** — Supprimer en masse les newsletters, spams, emails inutiles\n` +
+        `✅ **Marquer** — Lu / non-lu sur un ou plusieurs emails\n\n` +
+        `Dis-moi ce que tu veux faire, ou utilise les raccourcis ci-dessous ! 👇`,
+    }])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isPro])
 
