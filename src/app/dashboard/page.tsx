@@ -192,7 +192,12 @@ function useDashboardData() {
     )
   }
 
-  return { emails, totalEmails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser }
+  const refreshData = useCallback(async () => {
+    await Promise.all([fetchEmails(), fetchStats()])
+    setLastSyncedAt(new Date())
+  }, [fetchEmails, fetchStats])
+
+  return { emails, totalEmails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser, refreshData }
 }
 
 // ----------------------------------------------------------
@@ -913,15 +918,88 @@ function SettingsTab({ user }: { user: UserSession | null }) {
 // ----------------------------------------------------------
 // Composant : Onglet Pro Tools
 // ----------------------------------------------------------
-function ProToolsTab({ emails, stats, user }: {
+function ProToolsTab({ emails, stats, user, onRefresh }: {
   emails: EmailItem[]
   stats: DashboardStats | null
   user: UserSession | null
+  onRefresh?: () => void
 }) {
   const isPro = user?.plan === 'pro' || user?.plan === 'business'
   const [relabeling, setRelabeling] = useState(false)
   const [relabelResult, setRelabelResult] = useState<{ labeled: number; errors: number } | null>(null)
   const [exportDone, setExportDone] = useState(false)
+
+  // --- Tri complet de la boîte mail ---
+  interface SortJob {
+    status: 'idle' | 'running' | 'completed' | 'error'
+    totalEmails: number
+    processed: number
+    labeled: number
+    errors: number
+    currentBatch: number
+    totalBatches: number
+    lastError: string | null
+    statusMessage: string | null
+  }
+  const [sortJob, setSortJob] = useState<SortJob | null>(null)
+  const [sortLoading, setSortLoading] = useState(false)
+  const sortPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Charger l'état du job au montage
+  useEffect(() => {
+    if (!isPro) return
+    fetch('/api/emails/sort-all')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.job && d.job.status !== 'idle') setSortJob(d.job)
+      })
+      .catch(() => {})
+  }, [isPro])
+
+  // Polling pendant un job running
+  useEffect(() => {
+    if (sortJob?.status !== 'running') {
+      if (sortPollRef.current) clearInterval(sortPollRef.current)
+      return
+    }
+    sortPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/emails/sort-all')
+        const data = await res.json()
+        if (data.job) {
+          setSortJob(data.job)
+          if (data.job.status !== 'running') {
+            if (sortPollRef.current) clearInterval(sortPollRef.current)
+            onRefresh?.()
+          }
+        }
+      } catch {}
+    }, 3_000)
+    return () => { if (sortPollRef.current) clearInterval(sortPollRef.current) }
+  }, [sortJob?.status, onRefresh])
+
+  const handleSortAll = async () => {
+    setSortLoading(true)
+    try {
+      const res = await fetch('/api/emails/sort-all', { method: 'POST' })
+      const data = await res.json()
+      if (data.job) setSortJob(data.job)
+      else if (data.error) setSortJob((prev) => prev ? { ...prev, status: 'error', lastError: data.error } : null)
+    } catch {
+      setSortJob((prev) => prev ? { ...prev, status: 'error', lastError: 'Erreur réseau' } : null)
+    } finally {
+      setSortLoading(false)
+    }
+  }
+
+  const handleResetSort = async () => {
+    await fetch('/api/emails/sort-all', { method: 'DELETE' })
+    setSortJob(null)
+  }
+
+  const sortProgress = sortJob && sortJob.totalEmails > 0
+    ? Math.round((sortJob.processed / sortJob.totalEmails) * 100)
+    : 0
 
   // --- Export CSV ---
   const sanitizeCSVField = (field: string): string => {
@@ -1026,6 +1104,102 @@ function ProToolsTab({ emails, stats, user }: {
             Passer à Pro — 14j gratuits
           </Link>
         )}
+      </div>
+
+      {/* --- Tri complet de la boîte mail --- */}
+      <div className="relative rounded-2xl border border-white/[0.06] bg-[#0c0c10] p-6">
+        {!isPro && <LockedOverlay />}
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
+            <Mail className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-[#f0f0f5] font-semibold mb-1">Tri complet de la boîte mail</h3>
+            <p className="text-sm text-[#5a5a66] mb-4">
+              Analysez et classez automatiquement tous vos emails existants (jusqu'à 50 000). L'IA trie chaque email et applique les labels Gmail correspondants.
+            </p>
+
+            {/* État du job */}
+            {sortJob?.status === 'running' && (
+              <div className="mb-4 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#94949e] flex items-center gap-1.5">
+                    <RefreshCw className="w-3 h-3 animate-spin text-indigo-400" />
+                    {sortJob.statusMessage ?? 'Tri en cours...'}
+                  </span>
+                  <span className="text-[#5a5a66]">
+                    {sortJob.processed} / {sortJob.totalEmails}
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-indigo-600 to-violet-500 rounded-full transition-all duration-500"
+                    style={{ width: `${sortProgress}%` }}
+                  />
+                </div>
+                <div className="flex items-center gap-4 text-[10px] text-[#5a5a66]">
+                  <span>✓ {sortJob.labeled} labellisés</span>
+                  {sortJob.errors > 0 && <span className="text-red-400">✗ {sortJob.errors} erreurs</span>}
+                  <span>Batch {sortJob.currentBatch}/{sortJob.totalBatches}</span>
+                </div>
+              </div>
+            )}
+
+            {sortJob?.status === 'completed' && (
+              <div className="mb-4 p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+                <div className="flex items-center gap-2 text-sm text-emerald-300 font-medium">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Tri terminé !
+                </div>
+                <div className="flex items-center gap-4 mt-1 text-xs text-emerald-400/70">
+                  <span>{sortJob.processed} classifiés</span>
+                  <span>{sortJob.labeled} labellisés</span>
+                  {sortJob.errors > 0 && <span className="text-red-400">{sortJob.errors} erreurs</span>}
+                </div>
+              </div>
+            )}
+
+            {sortJob?.status === 'error' && (
+              <div className="mb-4 p-3 rounded-xl border border-red-500/20 bg-red-500/5">
+                <div className="flex items-center gap-2 text-sm text-red-300 font-medium">
+                  <AlertCircle className="w-4 h-4" />
+                  Erreur durant le tri
+                </div>
+                <p className="text-xs text-red-400/70 mt-1">{sortJob.lastError}</p>
+                {sortJob.processed > 0 && (
+                  <p className="text-xs text-[#5a5a66] mt-1">
+                    {sortJob.processed} emails traités avant l'erreur. Vous pouvez relancer pour reprendre.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 flex-wrap">
+              {sortJob?.status === 'running' ? (
+                <span className="text-xs text-[#5a5a66]">Le tri peut prendre quelques minutes selon la taille de votre boîte…</span>
+              ) : (
+                <>
+                  <button
+                    onClick={handleSortAll}
+                    disabled={!isPro || sortLoading}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+                  >
+                    <Mail className="w-4 h-4" />
+                    {sortJob?.status === 'error' ? 'Reprendre le tri' : sortJob?.status === 'completed' ? 'Relancer le tri' : 'Trier toute la boîte mail'}
+                  </button>
+                  {sortJob && sortJob.status !== 'idle' && (
+                    <button
+                      onClick={handleResetSort}
+                      className="text-xs text-[#5a5a66] hover:text-[#94949e] transition-colors"
+                    >
+                      Réinitialiser
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* --- Export CSV --- */}
@@ -1181,7 +1355,7 @@ function ProToolsTab({ emails, stats, user }: {
 // Page Dashboard principale
 // ----------------------------------------------------------
 function DashboardContent() {
-  const { emails, totalEmails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser } = useDashboardData()
+  const { emails, totalEmails, stats, user, loading, syncing, lastSyncedAt, error, sync, handleFeedback, fetchUser, refreshData } = useDashboardData()
   const searchParams = useSearchParams()
   const tabFromUrl = searchParams.get('tab')
   const checkoutStatus = searchParams.get('checkout')
@@ -1435,7 +1609,7 @@ function DashboardContent() {
         )}
 
         {activeTab === 'pro' && (
-          <ProToolsTab emails={emails} stats={stats} user={user} />
+          <ProToolsTab emails={emails} stats={stats} user={user} onRefresh={refreshData} />
         )}
 
         {activeTab === 'billing' && (
