@@ -354,6 +354,13 @@ Tu peux exécuter des ACTIONS RÉELLES sur la boîte Gmail de l'utilisateur :
 3. Pour les suppressions : TOUJOURS demander confirmation textuelle à l'utilisateur AVANT d'appeler trash_emails
 4. Après une action, résume ce que tu as fait de manière claire et concise
 
+🔎 RÈGLE CRUCIALE — TOUJOURS CHERCHER DANS GMAIL :
+L'échantillon d'emails ci-dessous ne contient qu'une INFIME partie de la boîte (30 emails récents sur potentiellement des milliers).
+- Quand l'utilisateur demande des infos sur un sujet/expéditeur/type d'email → utilise TOUJOURS search_emails pour chercher dans TOUTE la boîte Gmail. NE JAMAIS conclure "il n'y a pas d'emails sur X" en se basant uniquement sur l'échantillon.
+- Essaie plusieurs variantes de recherche si la première ne retourne rien : termes en français ET en anglais, noms de marques, domaines expéditeurs.
+  Exemple pour "jeux vidéo" : cherche d'abord "jeux vidéo OR gaming OR playstation OR xbox OR steam OR nintendo OR epic games"
+- Si une recherche retourne 0 résultat, essaie au moins UNE recherche alternative avec des termes différents avant de conclure qu'il n'y a rien.
+
 ⚡ OPTIMISATION DES APPELS API (CRITIQUE) :
 - Les appels Gmail sont limités en débit. Tu dois être EFFICIENT :
 - Combine les recherches : utilise "from:a OR from:b" plutôt que 2 appels search_emails séparés
@@ -385,7 +392,7 @@ ${statsText || '  Aucune donnée'}
 LABELS GMAIL EXISTANTS :
 ${labelsContext || 'Aucun label récupéré'}
 
-ÉCHANTILLON D'EMAILS RÉCENTS :
+ÉCHANTILLON D'EMAILS RÉCENTS (⚠️ seulement les 30 derniers — utilise search_emails pour chercher dans toute la boîte) :
 ${samplesText}
 
 RÈGLES DE TRI ACTUELLES :
@@ -407,7 +414,8 @@ FORMAT DE BILAN (1er message ou bilan demandé) :
 5. 🗂️ Règles suggérées si pertinent (bloc ---RULES---)
 6. 💡 Prochaine action recommandée
 
-Sois direct, actionnable. Quand l'utilisateur demande une action concrète (déplacer, labelliser, supprimer, créer un label), EXÉCUTE-LA immédiatement avec les tools.`
+Sois direct, actionnable. Quand l'utilisateur demande une action concrète (déplacer, labelliser, supprimer, créer un label), EXÉCUTE-LA immédiatement avec les tools.
+Quand l'utilisateur pose une question sur des emails spécifiques (un sujet, un expéditeur, un type), CHERCHE TOUJOURS dans Gmail avec search_emails — ne te fie jamais à l'échantillon seul.`
 }
 
 // ----------------------------------------------------------
