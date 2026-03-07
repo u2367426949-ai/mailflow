@@ -463,6 +463,20 @@ export async function applyLabelToEmail(
 }
 
 // ----------------------------------------------------------
+// Supprimer un label Gmail (uniquement les labels utilisateur)
+// ----------------------------------------------------------
+export async function deleteGmailLabel(
+  userId: string,
+  labelId: string
+): Promise<void> {
+  const gmail = await getGmailClient(userId)
+  await withRetry(
+    () => gmail.users.labels.delete({ userId: 'me', id: labelId }),
+    userId
+  )
+}
+
+// ----------------------------------------------------------
 // Déplacer un email : ajouter le label catégorie + retirer de INBOX
 // Gère les cas spéciaux (spam → SPAM, etc.)
 // ----------------------------------------------------------

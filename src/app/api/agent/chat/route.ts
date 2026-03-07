@@ -18,6 +18,7 @@ import {
   searchGmailMessages,
   listGmailLabels,
   createGmailLabel,
+  deleteGmailLabel,
   batchModifyGmailMessages,
   trashGmailMessages,
   getGmailMessageBody,
@@ -99,6 +100,21 @@ const agentTools: ChatCompletionTool[] = [
           name: { type: 'string', description: 'Nom du label (ex: "Voiture", "Projets/Design", "Achats en ligne")' },
         },
         required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_label',
+      description: 'Supprimer un label Gmail. UNIQUEMENT les labels utilisateur (type "user"). Ne peut PAS supprimer les labels système (INBOX, SENT, SPAM, TRASH, etc.). Les emails ne sont pas supprimés, seul le label est retiré. Demande confirmation avant de supprimer.',
+      parameters: {
+        type: 'object',
+        properties: {
+          labelId: { type: 'string', description: 'ID du label Gmail à supprimer (ex: "Label_123")' },
+          labelName: { type: 'string', description: 'Nom du label (pour confirmation dans la réponse)' },
+        },
+        required: ['labelId'],
       },
     },
   },
@@ -246,6 +262,24 @@ async function executeTool(
         if (!name || name.length > 100) return JSON.stringify({ error: 'Nom de label invalide' })
         const label = await createGmailLabel(userId, name)
         return JSON.stringify({ created: true, labelId: label.id, name: label.name })
+      }
+
+      case 'delete_label': {
+        const labelId = String(args.labelId ?? '').trim()
+        if (!labelId) return JSON.stringify({ error: 'labelId requis' })
+        // Bloquer la suppression des labels système
+        const systemLabels = ['INBOX', 'SENT', 'DRAFT', 'TRASH', 'SPAM', 'STARRED', 'IMPORTANT', 'UNREAD',
+          'CATEGORY_PERSONAL', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS']
+        if (systemLabels.includes(labelId)) {
+          return JSON.stringify({ error: 'Impossible de supprimer un label système Gmail' })
+        }
+        try {
+          await deleteGmailLabel(userId, labelId)
+          return JSON.stringify({ deleted: true, labelId, name: args.labelName ?? labelId })
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Erreur inconnue'
+          return JSON.stringify({ error: `Échec de la suppression : ${message}` })
+        }
       }
 
       case 'move_emails': {
