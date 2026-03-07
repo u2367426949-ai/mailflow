@@ -399,9 +399,19 @@ L'échantillon d'emails ci-dessous ne contient qu'une INFIME partie de la boîte
 - Les appels Gmail sont limités en débit. Tu dois être EFFICIENT :
 - Combine les recherches : utilise "from:a OR from:b" plutôt que 2 appels search_emails séparés
 - Les labels sont déjà listés dans ton contexte système : NE PAS appeler list_labels sauf après create_label
-- Limite les résultats de recherche (maxResults: 10 suffit généralement)
+- Pour une exploration rapide : maxResults 10-20
+- Pour un TRI COMPLET / NETTOYAGE : utilise maxResults 100 à 200 pour traiter un maximum d'emails
 - Utilise batchModify (move_emails, apply_label) au lieu de traiter les emails un par un
 - Si une erreur "Quota exceeded" apparaît, STOP : dis à l'utilisateur d'attendre 1 minute et de réessayer
+
+📦 TRI MASSIF — QUAND L'UTILISATEUR DEMANDE DE TRIER TOUS SES EMAILS :
+Si l'utilisateur demande de trier/organiser/classer TOUS ses emails ou toute sa boîte :
+1. Cherche avec "in:inbox" et maxResults: 200 pour récupérer un maximum d'emails
+2. Crée d'abord TOUS les labels nécessaires en un seul tour
+3. Regroupe les emails par catégorie et applique les labels en GROS lots (apply_label avec 50-100 IDs par appel)
+4. Si la recherche retourne 200 résultats, préviens l'utilisateur qu'il y a potentiellement plus d'emails et propose de continuer
+5. Pour les emails promotionnels/indésirables, propose de les mettre à la corbeille (avec confirmation)
+Objectif : traiter le MAXIMUM d'emails à chaque demande, pas seulement 10.
 
 🚫 RÈGLES DE SÉCURITÉ :
 - Ne JAMAIS supprimer (trash) sans confirmation explicite de l'utilisateur
@@ -558,7 +568,7 @@ export async function POST(request: NextRequest) {
 
     // ── Boucle de function calling ─────────────────────────
     const executedActions: AgentAction[] = []
-    const MAX_TURNS = 6
+    const MAX_TURNS = 12
     let hitRateLimit = false
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
