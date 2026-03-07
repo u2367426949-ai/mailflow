@@ -6,8 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { sendTrialReminderEmail } from '@/lib/emails'
-import { addDays, startOfDay, endOfDay } from 'date-fns'
+import { sendTrialReminderEmail, sendTrialExpiredEmail } from '@/lib/emails'
+import { addDays, startOfDay, endOfDay, subDays } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,10 +24,6 @@ function isCronAuthorized(request: NextRequest): boolean {
   return authHeader === `Bearer ${cronSecret}`
 }
 
-export async function GET(request: NextRequest) {
-  return POST(request)
-}
-
 export async function POST(request: NextRequest) {
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,6 +32,7 @@ export async function POST(request: NextRequest) {
   const now = new Date()
   let reminded3 = 0
   let reminded1 = 0
+  let expired = 0
   let errors = 0
 
   try {
@@ -45,7 +42,8 @@ export async function POST(request: NextRequest) {
 
     const usersExpiring3 = await db.user.findMany({
       where: {
-        plan: 'free',
+        plan: 'starter',
+        stripeSubscriptionId: null, // pas encore abonné → trial gratuit
         trialEndsAt: {
           gte: in3DaysStart,
           lte: in3DaysEnd,
@@ -60,7 +58,8 @@ export async function POST(request: NextRequest) {
 
     const usersExpiring1 = await db.user.findMany({
       where: {
-        plan: 'free',
+        plan: 'starter',
+        stripeSubscriptionId: null,
         trialEndsAt: {
           gte: in1DayStart,
           lte: in1DayEnd,
@@ -95,12 +94,46 @@ export async function POST(request: NextRequest) {
       })
     )
 
-    console.log(`[TrialReminder] Done — J-3: ${reminded3}, J-1: ${reminded1}, errors: ${errors}`)
+    // Trouver les utilisateurs dont le trial a expiré (hier)
+    const expiredStart = startOfDay(subDays(now, 1))
+    const expiredEnd = endOfDay(subDays(now, 1))
+
+    const usersExpired = await db.user.findMany({
+      where: {
+        plan: 'starter',
+        stripeSubscriptionId: null, // pas encore abonné
+        trialEndsAt: {
+          gte: expiredStart,
+          lte: expiredEnd,
+        },
+      },
+      select: { id: true, email: true, name: true },
+    })
+
+    // Downgrader + envoyer email d'expiration
+    await Promise.allSettled(
+      usersExpired.map(async (user) => {
+        try {
+          await db.user.update({
+            where: { id: user.id },
+            data: { plan: 'free' },
+          })
+          await sendTrialExpiredEmail({ email: user.email, name: user.name })
+          expired++
+        } catch (err) {
+          console.error(`[TrialReminder] Expiry failed for ${user.email}:`, err)
+          errors++
+        }
+      })
+    )
+
+    console.log(`[TrialReminder] Done — J-3: ${reminded3}, J-1: ${reminded1}, expired: ${expired}, errors: ${errors}`)
 
     return NextResponse.json({
       success: true,
       reminded3,
       reminded1,
+      expired,
       errors,
     })
   } catch (err) {

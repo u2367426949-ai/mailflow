@@ -6,6 +6,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripeClient, syncSubscriptionFromStripe } from '@/lib/stripe'
 import { db } from '@/lib/db'
+import {
+  sendSubscriptionConfirmationEmail,
+  sendCancellationEmail,
+  sendPaymentFailedEmail,
+} from '@/lib/emails'
 import type Stripe from 'stripe'
 
 export const dynamic = 'force-dynamic'
@@ -133,6 +138,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
     trialEnd
   )
 
+  // Envoyer l'email de confirmation (seulement si pas en trial — le trial a déjà l'email de bienvenue)
+  if (!trialEnd) {
+    const user = await db.user.findFirst({
+      where: { stripeCustomerId: customerId },
+      select: { email: true, name: true, plan: true },
+    })
+    if (user && ['starter', 'pro', 'business'].includes(user.plan)) {
+      sendSubscriptionConfirmationEmail(
+        { email: user.email, name: user.name },
+        user.plan as 'starter' | 'pro' | 'business'
+      ).catch(() => {})
+    }
+  }
+
   console.log(`[Stripe Webhook] Checkout completed for customer ${customerId}`)
 }
 
@@ -166,6 +185,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
   // Rétrograder vers free
   const user = await db.user.findFirst({
     where: { stripeCustomerId: customerId },
+    select: { id: true, email: true, name: true },
   })
 
   if (!user) return
@@ -179,6 +199,9 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
     },
   })
 
+  // Envoyer l'email de résiliation (non bloquant)
+  sendCancellationEmail({ email: user.email, name: user.name }).catch(() => {})
+
   console.log(`[Stripe Webhook] Subscription deleted for customer ${customerId}, downgraded to free`)
 }
 
@@ -186,7 +209,23 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
 // invoice.paid
 // ----------------------------------------------------------
 async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
-  // Logger simplement le paiement
+  // Si c'est la première facture après un trial (billing_reason = 'subscription_cycle' ou 'subscription_update')
+  // on envoie l'email de confirmation de souscription.
+  if (invoice.billing_reason === 'subscription_create' || invoice.billing_reason === 'subscription_cycle') {
+    const customerId = invoice.customer as string
+    const user = await db.user.findFirst({
+      where: { stripeCustomerId: customerId },
+      select: { email: true, name: true, plan: true },
+    })
+
+    if (user && ['starter', 'pro', 'business'].includes(user.plan)) {
+      sendSubscriptionConfirmationEmail(
+        { email: user.email, name: user.name },
+        user.plan as 'starter' | 'pro' | 'business'
+      ).catch(() => {})
+    }
+  }
+
   console.log(
     `[Stripe Webhook] Invoice paid: ${invoice.id} (${invoice.amount_paid / 100} ${invoice.currency})`
   )
@@ -205,7 +244,13 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void
 
   if (!user) return
 
-  // TODO: Envoyer un email de notification via Resend
+  // Envoyer l'email de paiement échoué (non bloquant)
+  sendPaymentFailedEmail(
+    { email: user.email, name: user.name },
+    invoice.amount_due,
+    invoice.currency
+  ).catch(() => {})
+
   console.warn(
     `[Stripe Webhook] Payment failed for user ${user.email} - invoice ${invoice.id}`
   )

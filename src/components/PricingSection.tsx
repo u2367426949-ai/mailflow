@@ -62,7 +62,7 @@ const plans = [
 const ANNUAL_DISCOUNT = 0.8 // -20%
 
 export function PricingSection() {
-  const [annual, setAnnual] = useState(false)
+  const [annual, setAnnual] = useState(true)
 
   return (
     <section id="pricing" className="py-24 border-t border-[#2a2a2a]">

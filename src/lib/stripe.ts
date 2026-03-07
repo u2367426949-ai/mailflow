@@ -147,6 +147,8 @@ export async function createCheckoutSession(
       trial_period_days: trialDays,
       metadata: { userId, plan },
     },
+    // Permet de démarrer un trial sans saisir de carte bancaire
+    payment_method_collection: 'if_required',
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata: { userId, plan },

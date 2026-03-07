@@ -52,6 +52,7 @@ interface UserSession {
   email: string
   plan: string
   isOnboarded: boolean
+  trialEndsAt?: string | null
   digestEnabled?: boolean
   digestTime?: string
   timezone?: string
@@ -278,7 +279,55 @@ function DashboardHeader({
 // ----------------------------------------------------------
 // Composant : Bannière contextuelle selon le plan
 // ----------------------------------------------------------
-function PlanBanner({ plan, onUpgrade }: { plan: string; onUpgrade: () => void }) {
+function PlanBanner({
+  plan,
+  trialEndsAt,
+  onUpgrade,
+}: {
+  plan: string
+  trialEndsAt?: string | null
+  onUpgrade: () => void
+}) {
+  // Calculer les jours restants de trial
+  const trialDaysLeft = trialEndsAt
+    ? Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null
+
+  const isOnTrial = plan === 'starter' && trialDaysLeft !== null && trialDaysLeft > 0
+
+  if (isOnTrial) {
+    const urgency = trialDaysLeft <= 3
+    return (
+      <div className={`rounded-2xl border p-4 flex items-center gap-3 ${
+        urgency
+          ? 'border-red-500/30 bg-red-500/5'
+          : 'border-indigo-500/20 bg-indigo-500/5'
+      }`}>
+        <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${urgency ? 'text-red-400' : 'text-indigo-400'}`} />
+        <div className="flex-1">
+          <p className={`text-sm font-medium ${urgency ? 'text-red-300' : 'text-indigo-300'}`}>
+            {urgency
+              ? `⏰ Plus que ${trialDaysLeft} jour${trialDaysLeft > 1 ? 's' : ''} d'essai gratuit !`
+              : `🎁 Essai gratuit — encore ${trialDaysLeft} jours`}
+          </p>
+          <p className={`text-xs mt-0.5 ${urgency ? 'text-red-400/60' : 'text-indigo-400/60'}`}>
+            {urgency
+              ? 'Choisis un plan maintenant pour ne pas perdre le tri automatique de tes emails.'
+              : 'Tu profites de toutes les fonctionnalités Starter. Sans carte bancaire.'}
+          </p>
+        </div>
+        <button
+          onClick={onUpgrade}
+          className={`flex-shrink-0 px-3 py-1.5 text-white text-xs font-semibold rounded-xl transition-colors ${
+            urgency ? 'bg-red-600 hover:bg-red-500' : 'bg-indigo-600 hover:bg-indigo-500'
+          }`}
+        >
+          S'abonner →
+        </button>
+      </div>
+    )
+  }
+
   if (plan === 'free') {
     return (
       <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 flex items-center gap-3">
@@ -1191,7 +1240,11 @@ function DashboardContent() {
         {/* Bannière plan */}
         {user && (
           <div className="mb-6">
-            <PlanBanner plan={user.plan} onUpgrade={() => handleCheckout('pro')} />
+            <PlanBanner
+              plan={user.plan}
+              trialEndsAt={user.trialEndsAt}
+              onUpgrade={() => handleCheckout('pro')}
+            />
           </div>
         )}
 

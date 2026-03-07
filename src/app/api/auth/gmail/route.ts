@@ -69,14 +69,15 @@ export async function GET(request: NextRequest) {
 
   // Vérification anti-CSRF : comparer le state avec le cookie oauth_state
   const storedState = request.cookies.get('oauth_state')?.value
-  if (storedState && storedState !== state) {
+  if (!storedState) {
+    // Cookie absent → rejeter systématiquement pour éviter les CSRF attacks
+    console.error('[Auth] oauth_state cookie missing — rejecting callback')
+    return NextResponse.redirect(`${APP_URL}/onboarding?error=csrf_mismatch`)
+  }
+  if (storedState !== state) {
     // Cookie présent mais ne correspond pas → attaque potentielle
     console.error('[Auth] CSRF state mismatch — stored:', storedState, 'received:', state)
     return NextResponse.redirect(`${APP_URL}/onboarding?error=csrf_mismatch`)
-  }
-  if (!storedState) {
-    // Cookie absent (peut arriver avec certains navigateurs / configs Vercel)
-    console.warn('[Auth] oauth_state cookie missing — skipping CSRF check')
   }
 
   try {
@@ -104,6 +105,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Créer ou mettre à jour l'utilisateur en DB
+    const isNewUser = !(await db.user.findUnique({ where: { googleId: profile.googleId }, select: { id: true } }))
     const user = await db.user.upsert({
       where: { googleId: profile.googleId },
       update: {
@@ -125,7 +127,9 @@ export async function GET(request: NextRequest) {
           ? encryptToken(tokens.refresh_token)
           : null,
         googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-        plan: 'free',
+        // Nouvel utilisateur → trial Starter 14j sans CB
+        plan: 'starter',
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         isOnboarded: false,
       },
     })
@@ -200,7 +204,9 @@ export async function GET(request: NextRequest) {
       })
 
       // Envoyer l'email de bienvenue pour les nouveaux utilisateurs (non bloquant)
-      sendWelcomeEmail({ email: user.email, name: user.name }).catch(() => {})
+      if (isNewUser) {
+        sendWelcomeEmail({ email: user.email, name: user.name }).catch(() => {})
+      }
     }
 
     // Émettre un JWT de session
@@ -214,7 +220,7 @@ export async function GET(request: NextRequest) {
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
-      .setExpirationTime('30d')
+      .setExpirationTime('7d')
       .sign(JWT_SECRET)
 
     // Rediriger vers l'onboarding ou le dashboard
@@ -229,7 +235,7 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60, // 30 jours
+      maxAge: 7 * 24 * 60 * 60, // 7 jours
       path: '/',
     })
 
