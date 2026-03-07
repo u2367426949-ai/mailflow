@@ -61,7 +61,7 @@ const agentTools: ChatCompletionTool[] = [
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Requête de recherche Gmail (ex: "from:amazon.fr", "subject:facture is:unread", "from:a OR from:b")' },
-          maxResults: { type: 'number', description: 'Nombre max de résultats (défaut: 10, max: 200). Utilise 10-20 pour explorer, 50-200 pour traiter en masse.' },
+          maxResults: { type: 'number', description: 'Nombre max de résultats (défaut: 10, max: 50000). Utilise 10-20 pour explorer, 200-1000 pour traiter en masse, 5000+ pour un tri complet.' },
         },
         required: ['query'],
       },
@@ -126,7 +126,7 @@ const agentTools: ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail des messages à déplacer (max 100)' },
+          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail des messages à déplacer (max 1000). Utilise allIds retourné par search_emails pour les opérations en masse.' },
           addLabelIds: { type: 'array', items: { type: 'string' }, description: 'Labels à ajouter (IDs Gmail)' },
           removeLabelIds: { type: 'array', items: { type: 'string' }, description: 'Labels à retirer (ex: ["INBOX"] pour archiver)' },
         },
@@ -138,11 +138,11 @@ const agentTools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'apply_label',
-      description: 'Appliquer un label Gmail à un ou plusieurs emails sans les retirer de l\'inbox. Utilise search_emails d\'abord pour obtenir les IDs.',
+      description: 'Appliquer un label Gmail à un ou plusieurs emails sans les retirer de l\'inbox. Utilise search_emails d\'abord pour obtenir les IDs. Utilise allIds pour appliquer en masse.',
       parameters: {
         type: 'object',
         properties: {
-          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail (max 100)' },
+          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail (max 1000). Utilise allIds de search_emails pour le tri massif.' },
           labelId: { type: 'string', description: 'ID du label Gmail à appliquer' },
         },
         required: ['emailIds', 'labelId'],
@@ -157,7 +157,7 @@ const agentTools: ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail (max 100)' },
+          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail (max 1000)' },
           labelId: { type: 'string', description: 'ID du label Gmail à retirer' },
         },
         required: ['emailIds', 'labelId'],
@@ -172,7 +172,7 @@ const agentTools: ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail à mettre à la corbeille (max 50)' },
+          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail à mettre à la corbeille (max 500)' },
         },
         required: ['emailIds'],
       },
@@ -186,7 +186,7 @@ const agentTools: ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail à archiver (max 100)' },
+          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail à archiver (max 1000)' },
         },
         required: ['emailIds'],
       },
@@ -200,7 +200,7 @@ const agentTools: ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail (max 100)' },
+          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail (max 1000)' },
         },
         required: ['emailIds'],
       },
@@ -214,7 +214,7 @@ const agentTools: ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail (max 100)' },
+          emailIds: { type: 'array', items: { type: 'string' }, description: 'Liste des IDs Gmail (max 1000)' },
         },
         required: ['emailIds'],
       },
@@ -240,9 +240,15 @@ async function executeTool(
     switch (toolName) {
       case 'search_emails': {
         const query = String(args.query ?? '')
-        const maxResults = Math.min(Number(args.maxResults) || 10, 200)
+        const maxResults = Math.min(Number(args.maxResults) || 10, 50000)
         const results = await searchGmailMessages(userId, query, maxResults)
-        return JSON.stringify({ found: results.length, emails: results })
+        // Renvoyer les détails des 200 premiers + tous les IDs pour les actions batch
+        return JSON.stringify({
+          totalFound: results.totalFound,
+          showing: results.emails.length,
+          emails: results.emails,
+          allIds: results.allIds,
+        })
       }
 
       case 'read_email': {
@@ -283,7 +289,7 @@ async function executeTool(
       }
 
       case 'move_emails': {
-        const emailIds = (args.emailIds as string[] ?? []).slice(0, 100)
+        const emailIds = (args.emailIds as string[] ?? []).slice(0, 1000)
         const addLabelIds = (args.addLabelIds as string[]) ?? []
         const removeLabelIds = (args.removeLabelIds as string[]) ?? []
         if (emailIds.length === 0) return JSON.stringify({ error: 'Aucun email spécifié' })
@@ -292,7 +298,7 @@ async function executeTool(
       }
 
       case 'apply_label': {
-        const emailIds = (args.emailIds as string[] ?? []).slice(0, 100)
+        const emailIds = (args.emailIds as string[] ?? []).slice(0, 1000)
         const labelId = String(args.labelId ?? '')
         if (emailIds.length === 0 || !labelId) return JSON.stringify({ error: 'emailIds et labelId requis' })
         const result = await batchModifyGmailMessages(userId, emailIds, [labelId])
@@ -300,7 +306,7 @@ async function executeTool(
       }
 
       case 'remove_label': {
-        const emailIds = (args.emailIds as string[] ?? []).slice(0, 100)
+        const emailIds = (args.emailIds as string[] ?? []).slice(0, 1000)
         const labelId = String(args.labelId ?? '')
         if (emailIds.length === 0 || !labelId) return JSON.stringify({ error: 'emailIds et labelId requis' })
         const result = await batchModifyGmailMessages(userId, emailIds, [], [labelId])
@@ -308,28 +314,28 @@ async function executeTool(
       }
 
       case 'trash_emails': {
-        const emailIds = (args.emailIds as string[] ?? []).slice(0, 50)
+        const emailIds = (args.emailIds as string[] ?? []).slice(0, 500)
         if (emailIds.length === 0) return JSON.stringify({ error: 'Aucun email spécifié' })
         const result = await trashGmailMessages(userId, emailIds)
         return JSON.stringify(result)
       }
 
       case 'archive_emails': {
-        const emailIds = (args.emailIds as string[] ?? []).slice(0, 100)
+        const emailIds = (args.emailIds as string[] ?? []).slice(0, 1000)
         if (emailIds.length === 0) return JSON.stringify({ error: 'Aucun email spécifié' })
         const result = await batchModifyGmailMessages(userId, emailIds, [], ['INBOX'])
         return JSON.stringify({ archived: result.modified })
       }
 
       case 'mark_as_read': {
-        const emailIds = (args.emailIds as string[] ?? []).slice(0, 100)
+        const emailIds = (args.emailIds as string[] ?? []).slice(0, 1000)
         if (emailIds.length === 0) return JSON.stringify({ error: 'Aucun email spécifié' })
         const result = await batchModifyGmailMessages(userId, emailIds, [], ['UNREAD'])
         return JSON.stringify({ markedRead: result.modified })
       }
 
       case 'mark_as_unread': {
-        const emailIds = (args.emailIds as string[] ?? []).slice(0, 100)
+        const emailIds = (args.emailIds as string[] ?? []).slice(0, 1000)
         if (emailIds.length === 0) return JSON.stringify({ error: 'Aucun email spécifié' })
         const result = await batchModifyGmailMessages(userId, emailIds, ['UNREAD'])
         return JSON.stringify({ markedUnread: result.modified })
@@ -406,12 +412,16 @@ L'échantillon d'emails ci-dessous ne contient qu'une INFIME partie de la boîte
 
 📦 TRI MASSIF — QUAND L'UTILISATEUR DEMANDE DE TRIER TOUS SES EMAILS :
 Si l'utilisateur demande de trier/organiser/classer TOUS ses emails ou toute sa boîte :
-1. Cherche avec "in:inbox" et maxResults: 200 pour récupérer un maximum d'emails
-2. Crée d'abord TOUS les labels nécessaires en un seul tour
-3. Regroupe les emails par catégorie et applique les labels en GROS lots (apply_label avec 50-100 IDs par appel)
-4. Si la recherche retourne 200 résultats, préviens l'utilisateur qu'il y a potentiellement plus d'emails et propose de continuer
-5. Pour les emails promotionnels/indésirables, propose de les mettre à la corbeille (avec confirmation)
-Objectif : traiter le MAXIMUM d'emails à chaque demande, pas seulement 10.
+1. Cherche avec "in:inbox" et maxResults: 5000 (ou plus) pour récupérer TOUS les IDs
+2. search_emails retourne : totalFound (nombre total), emails (détails des 200 premiers), allIds (TOUS les IDs)
+3. Analyse les 200 premiers emails pour comprendre les catégories nécessaires
+4. Crée d'abord TOUS les labels nécessaires
+5. Pour chaque catégorie, fais UNE recherche ciblée (ex: "from:amazon OR from:cdiscount") avec maxResults élevé
+6. Utilise les allIds retournés pour appliquer les labels EN MASSE (apply_label accepte jusqu'à 1000 IDs par appel)
+7. Si totalFound > nombre d'IDs traités, informe l'utilisateur et propose de continuer
+8. Pour les emails promotionnels/indésirables, propose de les mettre à la corbeille (avec confirmation)
+IMPORTANT : utilise TOUJOURS allIds (pas seulement les emails avec détails) pour les opérations batch !
+Objectif : traiter le MAXIMUM d'emails à chaque demande.
 
 🚫 RÈGLES DE SÉCURITÉ :
 - Ne JAMAIS supprimer (trash) sans confirmation explicite de l'utilisateur

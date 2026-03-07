@@ -602,14 +602,14 @@ export async function searchGmailMessages(
   userId: string,
   query: string,
   maxResults = 20
-): Promise<{ id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }[]> {
+): Promise<{ totalFound: number; allIds: string[]; emails: { id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }[] }> {
   const gmail = await getGmailClient(userId)
-  const safeMax = Math.min(Math.max(maxResults, 1), 200)
+  const safeMax = Math.min(Math.max(maxResults, 1), 50000)
 
-  // Phase 1 : collecter les IDs avec pagination
+  // Phase 1 : collecter les IDs avec pagination (messages.list est rapide)
   const allIds: string[] = []
   let pageToken: string | undefined = undefined
-  const PAGE_SIZE = 100 // Gmail API list max per page
+  const PAGE_SIZE = 500 // Gmail API list max per page
 
   do {
     const listResponse = await withRetry(
@@ -629,13 +629,14 @@ export async function searchGmailMessages(
     pageToken = listResponse.data.nextPageToken ?? undefined
   } while (pageToken && allIds.length < safeMax)
 
-  if (allIds.length === 0) return []
+  if (allIds.length === 0) return { totalFound: 0, allIds: [], emails: [] }
 
-  // Phase 2 : récupérer les détails (batch de 5 pour le rate limit)
+  // Phase 2 : récupérer les détails seulement pour les N premiers (les détails coûtent cher en API)
+  const DETAIL_LIMIT = Math.min(allIds.length, 200)
   const BATCH = 5
   const results: { id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }[] = []
 
-  for (let i = 0; i < allIds.length; i += BATCH) {
+  for (let i = 0; i < DETAIL_LIMIT; i += BATCH) {
     const batch = allIds.slice(i, i + BATCH)
     const settled = await Promise.allSettled(
       batch.map(async (msgId) => {
@@ -666,7 +667,7 @@ export async function searchGmailMessages(
     }
   }
 
-  return results
+  return { totalFound: allIds.length, allIds, emails: results }
 }
 
 // ----------------------------------------------------------
@@ -710,7 +711,7 @@ export async function trashGmailMessages(
 ): Promise<{ trashed: number; errors: number }> {
   if (messageIds.length === 0) return { trashed: 0, errors: 0 }
   const gmail = await getGmailClient(userId)
-  const safeIds = messageIds.slice(0, 50) // Limiter à 50 par sécurité
+  const safeIds = messageIds.slice(0, 500) // Limiter à 500 par sécurité
 
   let trashed = 0
   let errors = 0
