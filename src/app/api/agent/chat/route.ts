@@ -60,7 +60,7 @@ const agentTools: ChatCompletionTool[] = [
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Requête de recherche Gmail (ex: "from:amazon.fr", "subject:facture is:unread", "from:a OR from:b")' },
-          maxResults: { type: 'number', description: 'Nombre max de résultats (défaut: 10, max: 30)' },
+          maxResults: { type: 'number', description: 'Nombre max de résultats (défaut: 10, max: 200). Utilise 10-20 pour explorer, 50-200 pour traiter en masse.' },
         },
         required: ['query'],
       },
@@ -224,7 +224,7 @@ async function executeTool(
     switch (toolName) {
       case 'search_emails': {
         const query = String(args.query ?? '')
-        const maxResults = Math.min(Number(args.maxResults) || 10, 30)
+        const maxResults = Math.min(Number(args.maxResults) || 10, 200)
         const results = await searchGmailMessages(userId, query, maxResults)
         return JSON.stringify({ found: results.length, emails: results })
       }

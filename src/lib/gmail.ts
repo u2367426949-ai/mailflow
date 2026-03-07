@@ -588,30 +588,47 @@ export async function searchGmailMessages(
   userId: string,
   query: string,
   maxResults = 20
-): Promise<Array<{ id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }>> {
+): Promise<{ id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }[]> {
   const gmail = await getGmailClient(userId)
-  const safeMax = Math.min(Math.max(maxResults, 1), 50)
+  const safeMax = Math.min(Math.max(maxResults, 1), 200)
 
-  const listResponse = await withRetry(
-    () => gmail.users.messages.list({ userId: 'me', q: query, maxResults: safeMax }),
-    userId
-  )
+  // Phase 1 : collecter les IDs avec pagination
+  const allIds: string[] = []
+  let pageToken: string | undefined = undefined
+  const PAGE_SIZE = 100 // Gmail API list max per page
 
-  const messages = listResponse.data.messages ?? []
-  if (messages.length === 0) return []
+  do {
+    const listResponse = await withRetry(
+      () => gmail.users.messages.list({
+        userId: 'me',
+        q: query,
+        maxResults: Math.min(PAGE_SIZE, safeMax - allIds.length),
+        pageToken,
+      }),
+      userId
+    )
 
-  // Sequential batches of 5 to respect rate limits
+    const messages = listResponse.data.messages ?? []
+    for (const msg of messages) {
+      if (msg.id) allIds.push(msg.id)
+    }
+    pageToken = listResponse.data.nextPageToken ?? undefined
+  } while (pageToken && allIds.length < safeMax)
+
+  if (allIds.length === 0) return []
+
+  // Phase 2 : récupérer les détails (batch de 5 pour le rate limit)
   const BATCH = 5
-  const results: Array<{ id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }> = []
+  const results: { id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }[] = []
 
-  for (let i = 0; i < messages.length; i += BATCH) {
-    const batch = messages.slice(i, i + BATCH)
+  for (let i = 0; i < allIds.length; i += BATCH) {
+    const batch = allIds.slice(i, i + BATCH)
     const settled = await Promise.allSettled(
-      batch.map(async (msg) => {
+      batch.map(async (msgId) => {
         const detail = await withRetry(
           () => gmail.users.messages.get({
             userId: 'me',
-            id: msg.id!,
+            id: msgId,
             format: 'metadata',
             metadataHeaders: ['From', 'Subject', 'Date'],
           }),
@@ -621,7 +638,7 @@ export async function searchGmailMessages(
         const getHeader = (name: string) =>
           headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
         return {
-          id: msg.id!,
+          id: msgId,
           from: getHeader('From'),
           subject: getHeader('Subject'),
           snippet: detail.data.snippet ?? '',
