@@ -19,11 +19,25 @@ import {
   Crown,
   Sparkles,
   ChevronRight,
+  Search,
+  Tag,
+  Trash2,
+  Archive,
+  Mail,
+  FolderOpen,
+  Eye,
 } from 'lucide-react'
+
+interface AgentAction {
+  tool: string
+  args: Record<string, unknown>
+  result: Record<string, unknown>
+}
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  actions?: AgentAction[]
 }
 
 interface ApplyJob {
@@ -94,7 +108,7 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
       })
       const data = await res.json()
       if (data.reply) {
-        setMessages([...newMessages, { role: 'assistant', content: data.reply }])
+        setMessages([...newMessages, { role: 'assistant', content: data.reply, actions: data.actions ?? undefined }])
         if (!open) setUnreadDot(true)
       }
       if (data.extractedRules) {
@@ -153,15 +167,58 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
 
   // Suggestions rapides
   const quickActions = [
-    { label: '🔴 Urgents ?', msg: 'Quels sont mes emails les plus urgents en ce moment ?' },
-    { label: '📰 Désabonnements', msg: 'Je reçois trop de newsletters. Quelles listes devrais-je quitter ? Donne-moi les expéditeurs principaux.' },
-    { label: '🗂️ Règles auto', msg: 'Propose-moi des règles de tri automatiques adaptées à mes habitudes.' },
-    { label: '📊 Bilan boîte', msg: 'Donne-moi un bilan de ma boîte mail : volume, tendances, problèmes détectés.' },
-    { label: '🧹 Nettoyage', msg: 'Qu\'est-ce que je pourrais supprimer ou archiver pour nettoyer ma boîte mail ?' },
+    { label: '� Bilan complet', msg: 'Analyse ma boîte mail et donne-moi un bilan complet : volume, newsletters indésirables, expéditeurs récurrents, et propose des actions concrètes.' },
+    { label: '📁 Trier mes emails', msg: 'Recherche tous les emails non triés et organise-les dans les bons labels Gmail.' },
+    { label: '🏷️ Créer un label', msg: 'Aide-moi à créer de nouveaux labels pour mieux organiser ma boîte mail.' },
+    { label: '📰 Newsletters → Archive', msg: 'Trouve toutes les newsletters dans ma boîte et archive-les pour nettoyer mon inbox.' },
+    { label: '🧹 Nettoyage', msg: 'Quels emails devrais-je archiver ou supprimer pour nettoyer ma boîte ? Propose-moi des actions concrètes.' },
+    { label: '🔴 Urgents ?', msg: 'Quels sont mes emails les plus urgents ? Marque-les comme importants.' },
   ]
 
   const chatHeight = expanded ? 'h-[520px]' : 'h-[380px]'
   const chatWidth = expanded ? 'w-[480px]' : 'w-[380px]'
+
+  // ── Résumé d'une action exécutée par l'agent ─────────────
+  function ActionBadge({ action }: { action: AgentAction }) {
+    const iconMap: Record<string, React.ReactNode> = {
+      search_emails: <Search className="w-3 h-3 text-blue-400" />,
+      read_email: <Eye className="w-3 h-3 text-cyan-400" />,
+      list_labels: <Tag className="w-3 h-3 text-purple-400" />,
+      create_label: <Tag className="w-3 h-3 text-emerald-400" />,
+      move_emails: <FolderOpen className="w-3 h-3 text-amber-400" />,
+      apply_label: <Tag className="w-3 h-3 text-indigo-400" />,
+      remove_label: <Tag className="w-3 h-3 text-orange-400" />,
+      trash_emails: <Trash2 className="w-3 h-3 text-red-400" />,
+      archive_emails: <Archive className="w-3 h-3 text-teal-400" />,
+      mark_as_read: <Mail className="w-3 h-3 text-gray-400" />,
+      mark_as_unread: <Mail className="w-3 h-3 text-yellow-400" />,
+    }
+
+    const result = action.result
+    const hasError = 'error' in result
+
+    const summaryMap: Record<string, string> = {
+      search_emails: `${result.found ?? 0} email(s) trouvé(s)`,
+      read_email: 'Email lu',
+      list_labels: `${(result.labels as unknown[])?.length ?? 0} labels`,
+      create_label: hasError ? String(result.error) : `"${result.name}" créé`,
+      move_emails: `${result.moved ?? 0} déplacé(s)`,
+      apply_label: `${result.labeled ?? 0} labellisé(s)`,
+      remove_label: `${result.unlabeled ?? 0} délabellisé(s)`,
+      trash_emails: `${result.trashed ?? 0} supprimé(s)`,
+      archive_emails: `${result.archived ?? 0} archivé(s)`,
+      mark_as_read: `${result.markedRead ?? 0} marqué(s) lu(s)`,
+      mark_as_unread: `${result.markedUnread ?? 0} marqué(s) non lu(s)`,
+    }
+
+    return (
+      <div className={`flex items-center gap-1.5 text-[10px] ${hasError ? 'text-red-400' : 'text-[#94949e]'}`}>
+        {iconMap[action.tool] ?? <Zap className="w-3 h-3" />}
+        <span>{summaryMap[action.tool] ?? action.tool}</span>
+        {hasError && <AlertCircle className="w-2.5 h-2.5 text-red-400" />}
+      </div>
+    )
+  }
 
   // ── Bouton flottant ──────────────────────────────────────
   if (!open) {
@@ -228,7 +285,7 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
               <Sparkles className="w-2.5 h-2.5" /> Pro
             </span>
           </div>
-          <p className="text-[11px] text-[#5a5a66] truncate">Manager de boîte mail intelligent</p>
+          <p className="text-[11px] text-[#5a5a66] truncate">Assistant Gmail intelligent</p>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -261,7 +318,7 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
             </div>
             <div className="text-center">
               <p className="text-sm font-semibold text-[#f0f0f5]">Votre manager de boîte mail</p>
-              <p className="text-xs text-[#5a5a66] mt-1">J&apos;analyse vos emails et prends les décisions à votre place.</p>
+              <p className="text-xs text-[#5a5a66] mt-1">Je gère ta boîte Gmail : tri, labels, archivage, nettoyage.</p>
             </div>
             <div className="w-full space-y-1.5">
               {quickActions.map((qa) => (
@@ -296,6 +353,14 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
               }`}
             >
               <p className="whitespace-pre-wrap text-[13px]">{m.content}</p>
+              {/* Actions exécutées par l'agent */}
+              {m.actions && m.actions.length > 0 && (
+                <div className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
+                  {m.actions.map((action, j) => (
+                    <ActionBadge key={j} action={action} />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -404,7 +469,7 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={loading}
-            placeholder="Ex : trop de newsletters, aide-moi…"
+            placeholder="Ex : déplace les mails de X vers Factures…"
             className="flex-1 bg-transparent text-sm text-[#f0f0f5] placeholder-[#3d3d44] outline-none disabled:opacity-40"
           />
           <button

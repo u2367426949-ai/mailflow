@@ -527,3 +527,170 @@ export async function getOrCreateCategoryLabel(
 
   return labelId
 }
+
+// ----------------------------------------------------------
+// Rechercher des emails Gmail avec une requête
+// Utilise la syntaxe de recherche Gmail (from:, subject:, is:, etc.)
+// ----------------------------------------------------------
+export async function searchGmailMessages(
+  userId: string,
+  query: string,
+  maxResults = 20
+): Promise<Array<{ id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }>> {
+  const gmail = await getGmailClient(userId)
+  const safeMax = Math.min(Math.max(maxResults, 1), 50)
+
+  const listResponse = await gmail.users.messages.list({
+    userId: 'me',
+    q: query,
+    maxResults: safeMax,
+  })
+
+  const messages = listResponse.data.messages ?? []
+  if (messages.length === 0) return []
+
+  const BATCH = 25
+  const results: Array<{ id: string; from: string; subject: string; snippet: string; date: string; labels: string[] }> = []
+
+  for (let i = 0; i < messages.length; i += BATCH) {
+    const batch = messages.slice(i, i + BATCH)
+    const settled = await Promise.allSettled(
+      batch.map(async (msg) => {
+        const detail = await gmail.users.messages.get({
+          userId: 'me',
+          id: msg.id!,
+          format: 'metadata',
+          metadataHeaders: ['From', 'Subject', 'Date'],
+        })
+        const headers = detail.data.payload?.headers ?? []
+        const getHeader = (name: string) =>
+          headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
+        return {
+          id: msg.id!,
+          from: getHeader('From'),
+          subject: getHeader('Subject'),
+          snippet: detail.data.snippet ?? '',
+          date: getHeader('Date'),
+          labels: detail.data.labelIds ?? [],
+        }
+      })
+    )
+    for (const r of settled) {
+      if (r.status === 'fulfilled') results.push(r.value)
+    }
+  }
+
+  return results
+}
+
+// ----------------------------------------------------------
+// Modification batch de messages Gmail (ajouter/retirer des labels)
+// Supporte jusqu'à 1000 messages par appel Gmail API
+// ----------------------------------------------------------
+export async function batchModifyGmailMessages(
+  userId: string,
+  messageIds: string[],
+  addLabelIds: string[] = [],
+  removeLabelIds: string[] = []
+): Promise<{ modified: number }> {
+  if (messageIds.length === 0) return { modified: 0 }
+  const gmail = await getGmailClient(userId)
+
+  const CHUNK = 1000
+  for (let i = 0; i < messageIds.length; i += CHUNK) {
+    const chunk = messageIds.slice(i, i + CHUNK)
+    await gmail.users.messages.batchModify({
+      userId: 'me',
+      requestBody: {
+        ids: chunk,
+        addLabelIds: addLabelIds.length > 0 ? addLabelIds : undefined,
+        removeLabelIds: removeLabelIds.length > 0 ? removeLabelIds : undefined,
+      },
+    })
+  }
+
+  return { modified: messageIds.length }
+}
+
+// ----------------------------------------------------------
+// Mettre des emails à la corbeille
+// ----------------------------------------------------------
+export async function trashGmailMessages(
+  userId: string,
+  messageIds: string[]
+): Promise<{ trashed: number; errors: number }> {
+  if (messageIds.length === 0) return { trashed: 0, errors: 0 }
+  const gmail = await getGmailClient(userId)
+  const safeIds = messageIds.slice(0, 50) // Limiter à 50 par sécurité
+
+  let trashed = 0
+  let errors = 0
+
+  const BATCH = 10
+  for (let i = 0; i < safeIds.length; i += BATCH) {
+    const batch = safeIds.slice(i, i + BATCH)
+    const settled = await Promise.allSettled(
+      batch.map((id) => gmail.users.messages.trash({ userId: 'me', id }))
+    )
+    for (const r of settled) {
+      if (r.status === 'fulfilled') trashed++
+      else errors++
+    }
+  }
+
+  return { trashed, errors }
+}
+
+// ----------------------------------------------------------
+// Récupérer le corps d'un email Gmail
+// ----------------------------------------------------------
+export async function getGmailMessageBody(
+  userId: string,
+  messageId: string
+): Promise<{ subject: string; from: string; body: string; snippet: string }> {
+  const gmail = await getGmailClient(userId)
+
+  const detail = await gmail.users.messages.get({
+    userId: 'me',
+    id: messageId,
+    format: 'full',
+  })
+
+  const headers = detail.data.payload?.headers ?? []
+  const getHeader = (name: string) =>
+    headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
+
+  // Extraire le corps texte (text/plain en priorité, sinon text/html nettoyé)
+  let body = ''
+  const payload = detail.data.payload
+
+  function extractBody(part: typeof payload): string {
+    if (!part) return ''
+    if (part.mimeType === 'text/plain' && part.body?.data) {
+      return Buffer.from(part.body.data, 'base64').toString('utf8')
+    }
+    if (part.parts) {
+      for (const sub of part.parts) {
+        const text = extractBody(sub)
+        if (text) return text
+      }
+    }
+    // Fallback HTML
+    if (part.mimeType === 'text/html' && part.body?.data) {
+      const html = Buffer.from(part.body.data, 'base64').toString('utf8')
+      return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    }
+    return ''
+  }
+
+  body = extractBody(payload)
+  // Limiter la taille pour ne pas exploser le contexte
+  if (body.length > 2000) body = body.substring(0, 2000) + '…'
+
+  return {
+    subject: getHeader('Subject'),
+    from: getHeader('From'),
+    body,
+    snippet: detail.data.snippet ?? '',
+  }
+}
