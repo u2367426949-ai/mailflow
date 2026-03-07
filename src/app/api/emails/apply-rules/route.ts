@@ -27,6 +27,7 @@ interface ApplyJob {
   relabeled: number
   errors: number
   lastError: string | null
+  statusMessage: string | null
 }
 
 const DEFAULT_JOB: ApplyJob = {
@@ -39,6 +40,7 @@ const DEFAULT_JOB: ApplyJob = {
   relabeled: 0,
   errors: 0,
   lastError: null,
+  statusMessage: null,
 }
 
 // ----------------------------------------------------------

@@ -34,6 +34,7 @@ interface ApplyJob {
   relabeled: number
   errors: number
   lastError: string | null
+  statusMessage: string | null
 }
 
 interface MailAgentProps {
@@ -126,7 +127,7 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
       }
 
       // 2. Lancer l'application (synchrone côté serveur — on attend la fin)
-      setApplyJob({ status: 'running', totalEmails: 0, processed: 0, reclassified: 0, relabeled: 0, errors: 0, lastError: null })
+      setApplyJob({ status: 'running', totalEmails: 0, processed: 0, reclassified: 0, relabeled: 0, errors: 0, lastError: null, statusMessage: null })
       const applyRes = await fetch('/api/emails/apply-rules', { method: 'POST' })
       const applyData = await applyRes.json().catch(() => ({}))
       if (!applyRes.ok) {

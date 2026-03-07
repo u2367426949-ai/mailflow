@@ -61,10 +61,10 @@ async function processEmail(
     // Vérifier si l'email est déjà en DB
     const existing = await db.email.findUnique({
       where: { gmailId: gmailEmail.id },
-      select: { id: true },
+      select: { id: true, isProcessed: true },
     })
 
-    if (existing) return { success: true, skipped: true }
+    if (existing?.isProcessed) return { success: true, skipped: true }
 
     // Classifier avec OpenAI (+ règles personnalisées si présentes)
     const classification = await classifyEmail({
@@ -74,30 +74,32 @@ async function processEmail(
       snippet: gmailEmail.snippet,
     }, customRules)
 
-    // Sauvegarder l'email en DB
-    const savedEmail = await db.email.create({
-      data: {
-        userId,
-        gmailId: gmailEmail.id,
-        threadId: gmailEmail.threadId,
-        from: gmailEmail.from,
-        to: gmailEmail.to,
-        cc: gmailEmail.cc,
-        subject: gmailEmail.subject,
-        snippet: gmailEmail.snippet,
-        receivedAt: gmailEmail.receivedAt,
-        category: classification.category,
-        confidence: classification.confidence,
-        labels: gmailEmail.labels,
-        isRead: gmailEmail.isRead,
-        aiReason: classification.reason,
-        isProcessed: true,
-        processedAt: new Date(),
-        metadata: {
-          classifiedBy: classification.source === 'openai' ? 'gpt-4o-mini' : 'rules',
-        },
+    // Sauvegarder l'email en DB (ou mettre à jour si retry)
+    const emailData = {
+      userId,
+      gmailId: gmailEmail.id,
+      threadId: gmailEmail.threadId,
+      from: gmailEmail.from,
+      to: gmailEmail.to,
+      cc: gmailEmail.cc,
+      subject: gmailEmail.subject,
+      snippet: gmailEmail.snippet,
+      receivedAt: gmailEmail.receivedAt,
+      category: classification.category,
+      confidence: classification.confidence,
+      labels: gmailEmail.labels,
+      isRead: gmailEmail.isRead,
+      aiReason: classification.reason,
+      isProcessed: true,
+      processedAt: new Date(),
+      metadata: {
+        classifiedBy: classification.source === 'openai' ? 'gpt-4o-mini' : 'rules',
       },
-    })
+    }
+
+    const savedEmail = existing
+      ? await db.email.update({ where: { id: existing.id }, data: emailData })
+      : await db.email.create({ data: emailData })
 
     // Labelliser + déplacer dans Gmail si la confiance est suffisante
     if (classification.confidence >= 0.6 && classification.category !== 'unknown') {
@@ -121,6 +123,30 @@ async function processEmail(
     return { success: true }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error'
+    // Sauvegarder l'email en DB comme non traité pour retry ultérieur
+    try {
+      await db.email.upsert({
+        where: { gmailId: gmailEmail.id },
+        create: {
+          userId,
+          gmailId: gmailEmail.id,
+          threadId: gmailEmail.threadId,
+          from: gmailEmail.from,
+          to: gmailEmail.to,
+          cc: gmailEmail.cc,
+          subject: gmailEmail.subject,
+          snippet: gmailEmail.snippet,
+          receivedAt: gmailEmail.receivedAt,
+          labels: gmailEmail.labels,
+          isRead: gmailEmail.isRead,
+          isProcessed: false,
+          metadata: { error: msg },
+        },
+        update: {}, // Ne pas écraser si déjà présent
+      })
+    } catch {
+      // Ignorer l'erreur de sauvegarde d'urgence
+    }
     return { success: false, error: msg }
   }
 }
@@ -214,13 +240,37 @@ export async function POST(request: NextRequest) {
           limit
         )
 
-        console.log(`[Process] Found ${newEmails.length} new emails for user ${user.id}`)
+        // Récupérer aussi les emails en échec précédent (retry, max 10 par run)
+        const failedEmails = await db.email.findMany({
+          where: { userId: user.id, isProcessed: false },
+          select: { gmailId: true, from: true, to: true, cc: true, subject: true, snippet: true, threadId: true, receivedAt: true, labels: true, isRead: true },
+          take: 10,
+          orderBy: { createdAt: 'asc' },
+        })
+
+        // Convertir les échecs en format GmailMessage pour retraitement
+        const retryEmails = failedEmails.map((e) => ({
+          id: e.gmailId,
+          threadId: e.threadId,
+          from: e.from,
+          to: e.to,
+          cc: e.cc,
+          subject: e.subject,
+          snippet: e.snippet,
+          receivedAt: e.receivedAt,
+          labels: e.labels,
+          isRead: e.isRead,
+        }))
+
+        const allToProcess = [...newEmails, ...retryEmails]
+
+        console.log(`[Process] Found ${newEmails.length} new + ${retryEmails.length} retry emails for user ${user.id}`)
 
         // === BATCH PROCESSING (QA Fix #4) ===
         // Traitement par lots parallèles pour performance
         // BATCH_SIZE = 5 pour équilibrer vitesse et rate limits OpenAI
-        for (let i = 0; i < newEmails.length; i += BATCH_SIZE) {
-          const batch = newEmails.slice(i, i + BATCH_SIZE)
+        for (let i = 0; i < allToProcess.length; i += BATCH_SIZE) {
+          const batch = allToProcess.slice(i, i + BATCH_SIZE)
 
           const batchResults = await Promise.allSettled(
             batch.map((gmailEmail) => processEmail(user.id, gmailEmail, customRules))
@@ -240,18 +290,17 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Pause entre les batches pour respecter les rate limits OpenAI
-          // (5 emails × 100ms d'intervalle minimum = ~500ms/batch)
-          if (i + BATCH_SIZE < newEmails.length) {
-            await new Promise((resolve) => setTimeout(resolve, 200))
-          }
+
         }
 
-        // Mettre à jour le lastSyncAt
-        await db.user.update({
-          where: { id: user.id },
-          data: { lastSyncAt: new Date() },
-        })
+        // Mettre à jour le lastSyncAt seulement si des emails ont été traités OU si aucune erreur
+        // Évite de perdre des emails si la limite plan est atteinte avec des erreurs
+        if (errorCount === 0 || processedCount > 0) {
+          await db.user.update({
+            where: { id: user.id },
+            data: { lastSyncAt: new Date() },
+          })
+        }
 
         results.push({
           userId: user.id,

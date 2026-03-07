@@ -29,6 +29,9 @@ interface SortJob {
   currentBatch: number
   totalBatches: number
   lastError: string | null
+  statusMessage: string | null
+  /** gmailId du dernier email traité — permet de reprendre après timeout */
+  lastProcessedGmailId: string | null
 }
 
 const DEFAULT_JOB: SortJob = {
@@ -42,6 +45,8 @@ const DEFAULT_JOB: SortJob = {
   currentBatch: 0,
   totalBatches: 0,
   lastError: null,
+  statusMessage: null,
+  lastProcessedGmailId: null,
 }
 
 // ----------------------------------------------------------
@@ -146,23 +151,29 @@ export async function POST(request: NextRequest) {
   // Récupérer les customRules
   const customRules = typeof settings?.customRules === 'string' ? settings.customRules : null
 
-  // Initialiser le job
+  // Vérifier si on reprend un job interrompu
+  const isResume = currentSortJob.status === 'error' && currentSortJob.lastProcessedGmailId
+
+  // Initialiser le job (conserver la progression si reprise)
   await updateSortJob(userId, {
     status: 'running',
-    startedAt: new Date().toISOString(),
+    startedAt: isResume ? currentSortJob.startedAt : new Date().toISOString(),
     completedAt: null,
-    totalEmails: 0,
-    processed: 0,
-    labeled: 0,
+    totalEmails: isResume ? currentSortJob.totalEmails : 0,
+    processed: isResume ? currentSortJob.processed : 0,
+    labeled: isResume ? currentSortJob.labeled : 0,
     errors: 0,
     currentBatch: 0,
     totalBatches: 0,
     lastError: null,
+    statusMessage: isResume ? 'Reprise du tri...' : null,
+    lastProcessedGmailId: isResume ? currentSortJob.lastProcessedGmailId : null,
   })
 
   // Traitement SYNCHRONE (Vercel tue les background jobs après la réponse)
+  const resumeId = isResume ? currentSortJob.lastProcessedGmailId : null
   try {
-    await processSortJob(userId, customRules)
+    await processSortJob(userId, customRules, resumeId)
   } catch (err) {
     console.error('[SortAll] Fatal error:', err)
     await updateSortJob(userId, {
@@ -187,7 +198,7 @@ export async function POST(request: NextRequest) {
 //   - Progression : mise à jour tous les BATCH_SIZE emails
 // ----------------------------------------------------------
 
-async function processSortJob(userId: string, customRules: string | null) {
+async function processSortJob(userId: string, customRules: string | null, resumeFromGmailId?: string | null) {
   const CONCURRENCY = 5     // Appels OpenAI simultanés
   const BATCH_SIZE = 20     // Taille du batch pour la progression
   const MAX_EMAILS = 50000  // Limite Pro
@@ -209,22 +220,37 @@ async function processSortJob(userId: string, customRules: string | null) {
 
   try {
     // Phase 1 : Récupérer TOUS les emails de la boîte Gmail (avec pagination)
-    await updateSortJob(userId, { lastError: 'Récupération des emails en cours...' })
+    await updateSortJob(userId, { statusMessage: 'Récupération des emails en cours...' })
 
     const allEmails = await fetchAllMailboxEmails(userId, MAX_EMAILS, (fetched) => {
       // Mise à jour du nombre d'emails trouvés pendant la pagination
       updateSortJob(userId, { totalEmails: fetched }).catch(() => {})
     })
 
-    // Filtrer ceux qu'on a déjà en DB
-    const existingIds = new Set(
-      (await db.email.findMany({
-        where: { userId },
+    // Filtrer ceux qu'on a déjà en DB — requête batch par blocs de 5000 pour éviter la surcharge mémoire
+    const existingIds = new Set<string>()
+    const allGmailIds = allEmails.map((e) => e.id)
+    const DB_BATCH = 5000
+    for (let i = 0; i < allGmailIds.length; i += DB_BATCH) {
+      const chunk = allGmailIds.slice(i, i + DB_BATCH)
+      const found = await db.email.findMany({
+        where: { userId, gmailId: { in: chunk } },
         select: { gmailId: true },
-      })).map((e) => e.gmailId)
-    )
+      })
+      for (const e of found) existingIds.add(e.gmailId)
+    }
 
-    const newEmails = allEmails.filter((e) => !existingIds.has(e.id))
+    let newEmails = allEmails.filter((e) => !existingIds.has(e.id))
+
+    // Si reprise après timeout : ignorer les emails déjà traités (avant le checkpoint)
+    if (resumeFromGmailId) {
+      const resumeIdx = newEmails.findIndex((e) => e.id === resumeFromGmailId)
+      if (resumeIdx >= 0) {
+        newEmails = newEmails.slice(resumeIdx + 1)
+        console.log(`[SortAll] Resuming after ${resumeFromGmailId}, ${newEmails.length} emails remaining`)
+      }
+    }
+
     const totalBatches = Math.ceil(newEmails.length / BATCH_SIZE)
 
     await updateSortJob(userId, {
@@ -349,12 +375,15 @@ async function processSortJob(userId: string, customRules: string | null) {
         }
       }
 
-      // --- Étape D : Mise à jour de la progression ---
+      // --- Étape D : Mise à jour de la progression + checkpoint ---
+      const lastGmailId = batch[batch.length - 1]?.id ?? null
       await updateSortJob(userId, {
         currentBatch: batchNum,
         processed,
         labeled,
         errors,
+        lastProcessedGmailId: lastGmailId,
+        statusMessage: `Batch ${batchNum}/${totalBatches}`,
       })
     }
 
@@ -365,6 +394,8 @@ async function processSortJob(userId: string, customRules: string | null) {
       processed,
       labeled,
       errors,
+      statusMessage: null,
+      lastProcessedGmailId: null,
     })
 
     await db.user.update({
