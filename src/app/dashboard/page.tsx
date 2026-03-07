@@ -19,7 +19,6 @@ import {
   AlertCircle,
   ChevronRight,
   CreditCard,
-  Bell,
   CheckCircle2,
   Download,
   Tag,
@@ -78,7 +77,7 @@ function useDashboardData() {
       if (!res.ok) throw new Error('Failed to fetch emails')
       const data = await res.json()
       setEmails(
-        (data.emails ?? []).map((e: any) => ({
+        (data.emails ?? []).map((e: EmailItem & { receivedAt: string }) => ({
           ...e,
           receivedAt: new Date(e.receivedAt),
         }))
@@ -134,13 +133,31 @@ function useDashboardData() {
     load()
   }, [load])
 
-  // Auto-refresh toutes les 30 secondes
+  // Auto-refresh toutes les 30 secondes (seulement si l'onglet est visible)
   useEffect(() => {
-    const interval = setInterval(async () => {
-      await Promise.all([fetchEmails(), fetchStats()])
-      setLastSyncedAt(new Date())
-    }, 30_000)
-    return () => clearInterval(interval)
+    let interval: ReturnType<typeof setInterval>
+
+    const startPolling = () => {
+      interval = setInterval(async () => {
+        if (document.hidden) return
+        await Promise.all([fetchEmails(), fetchStats()])
+        setLastSyncedAt(new Date())
+      }, 30_000)
+    }
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        // Refresh immédiat au retour sur l'onglet
+        Promise.all([fetchEmails(), fetchStats()]).then(() => setLastSyncedAt(new Date()))
+      }
+    }
+
+    startPolling()
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }, [fetchEmails, fetchStats])
 
   const sync = async () => {
@@ -192,9 +209,16 @@ function DashboardHeader({
   lastSyncedAt: Date | null
   onSync: () => void
 }) {
-  const syncAgo = lastSyncedAt
-    ? Math.round((Date.now() - lastSyncedAt.getTime()) / 1000)
-    : null
+  const [syncAgo, setSyncAgo] = useState<number | null>(null)
+
+  useEffect(() => {
+    const update = () => {
+      setSyncAgo(lastSyncedAt ? Math.round((Date.now() - lastSyncedAt.getTime()) / 1000) : null)
+    }
+    update()
+    const id = setInterval(update, 1_000)
+    return () => clearInterval(id)
+  }, [lastSyncedAt])
 
   const getSyncLabel = () => {
     if (syncing) return 'Sync...'
@@ -259,9 +283,6 @@ function DashboardHeader({
 
             {/* User menu */}
             <div className="flex items-center gap-1">
-              <button className="p-2 rounded-xl text-[#5a5a66] hover:text-[#94949e] hover:bg-white/[0.03] transition-all duration-200">
-                <Bell className="w-4 h-4" />
-              </button>
               <Link
                 href="/dashboard?tab=settings"
                 className="p-2 rounded-xl text-[#5a5a66] hover:text-[#94949e] hover:bg-white/[0.03] transition-all duration-200"
@@ -684,6 +705,17 @@ function SettingsTab({ user }: { user: UserSession | null }) {
   const [digestEnabled, setDigestEnabled] = useState(user?.digestEnabled ?? true)
   const [digestTime, setDigestTime] = useState(user?.digestTime ?? '08:00')
   const [timezone, setTimezone] = useState(user?.timezone ?? 'Europe/Paris')
+
+  // Sync state when user prop loads/changes
+  useEffect(() => {
+    if (user) {
+      setName(user.name ?? '')
+      setDigestEnabled(user.digestEnabled ?? true)
+      setDigestTime(user.digestTime ?? '08:00')
+      setTimezone(user.timezone ?? 'Europe/Paris')
+    }
+  }, [user])
+
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
@@ -710,7 +742,8 @@ function SettingsTab({ user }: { user: UserSession | null }) {
     }
   }
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    if (!confirm('Voulez-vous vraiment vous déconnecter ?')) return
     document.cookie = 'mailflow_session=; path=/; max-age=0'
     window.location.href = '/'
   }
@@ -891,17 +924,24 @@ function ProToolsTab({ emails, stats, user }: {
   const [exportDone, setExportDone] = useState(false)
 
   // --- Export CSV ---
+  const sanitizeCSVField = (field: string): string => {
+    const escaped = field.replace(/"/g, '""')
+    // Prevent CSV injection: prefix dangerous characters with apostrophe
+    const safe = /^[=+\-@\t\r]/.test(escaped) ? `'${escaped}` : escaped
+    return `"${safe}"`
+  }
+
   const handleExportCSV = () => {
     const headers = ['Date', 'Expéditeur', 'Sujet', 'Catégorie', 'Confiance', 'Lu']
     const rows = emails.map((e) => [
-      new Date(e.receivedAt).toLocaleDateString('fr-FR'),
-      e.from,
-      `"${e.subject.replace(/"/g, '""')}"`,
-      e.category,
-      e.confidence != null ? `${Math.round(e.confidence * 100)}%` : '—',
-      e.isRead ? 'Oui' : 'Non',
+      sanitizeCSVField(new Date(e.receivedAt).toLocaleDateString('fr-FR')),
+      sanitizeCSVField(e.from),
+      sanitizeCSVField(e.subject),
+      sanitizeCSVField(e.category),
+      sanitizeCSVField(e.confidence != null ? `${Math.round(e.confidence * 100)}%` : '—'),
+      sanitizeCSVField(e.isRead ? 'Oui' : 'Non'),
     ])
-    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n')
+    const csv = [headers.map(sanitizeCSVField), ...rows].map((r) => r.join(',')).join('\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1188,23 +1228,35 @@ function DashboardContent() {
   ]
 
   const handleCheckout = async (plan: string) => {
-    const res = await fetch('/api/billing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'checkout', plan }),
-    })
-    const data = await res.json()
-    if (data.url) window.location.href = data.url
+    try {
+      const res = await fetch('/api/billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'checkout', plan }),
+      })
+      if (!res.ok) throw new Error('Erreur lors de la création du paiement')
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+    } catch (err) {
+      console.error('[Billing] Checkout error:', err)
+      alert('Impossible de lancer le paiement. Veuillez réessayer.')
+    }
   }
 
   const handlePortal = async () => {
-    const res = await fetch('/api/billing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'portal' }),
-    })
-    const data = await res.json()
-    if (data.url) window.location.href = data.url
+    try {
+      const res = await fetch('/api/billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'portal' }),
+      })
+      if (!res.ok) throw new Error('Erreur portail')
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+    } catch (err) {
+      console.error('[Billing] Portal error:', err)
+      alert('Impossible d\'ouvrir le portail de facturation. Veuillez réessayer.')
+    }
   }
 
   return (

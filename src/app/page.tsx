@@ -68,6 +68,31 @@ function NavBar({ session }: { session: { name?: string; avatar?: string; email?
               FAQ
             </Link>
           </nav>
+
+          {/* Mobile menu */}
+          <details className="md:hidden relative group">
+            <summary className="list-none p-2 rounded-xl hover:bg-white/[0.03] cursor-pointer transition-colors">
+              <svg className="w-5 h-5 text-[#94949e]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </summary>
+            <div className="absolute right-0 top-full mt-2 w-48 py-2 rounded-xl glass border border-white/[0.08] shadow-2xl z-50">
+              <Link href="#features" className="block px-4 py-2.5 text-sm text-[#94949e] hover:text-[#f0f0f5] hover:bg-white/[0.03] transition-colors">
+                Fonctionnalités
+              </Link>
+              <Link href="#pricing" className="block px-4 py-2.5 text-sm text-[#94949e] hover:text-[#f0f0f5] hover:bg-white/[0.03] transition-colors">
+                Tarifs
+              </Link>
+              <Link href="#faq" className="block px-4 py-2.5 text-sm text-[#94949e] hover:text-[#f0f0f5] hover:bg-white/[0.03] transition-colors">
+                FAQ
+              </Link>
+              {!session && (
+                <Link href="/login" className="block px-4 py-2.5 text-sm text-[#94949e] hover:text-[#f0f0f5] hover:bg-white/[0.03] transition-colors border-t border-white/[0.06] mt-1 pt-2.5">
+                  Connexion
+                </Link>
+              )}
+            </div>
+          </details>
           <div className="flex items-center gap-3">
             {session ? (
               <Link

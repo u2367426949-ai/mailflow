@@ -102,14 +102,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Plan Pro requis' }, { status: 403 })
   }
 
-  // Vérifier qu'un job n'est pas déjà en cours
-  const currentJob = await getApplyJob(userId)
-  if (currentJob.status === 'running') {
-    return NextResponse.json({ error: 'Application déjà en cours', job: currentJob }, { status: 409 })
+  // Vérifier qu'un job n'est pas déjà en cours (utiliser settings déjà chargé)
+  const settings = user.settings as Record<string, unknown> | null
+  const currentApplyJob = (settings?.applyRulesJob as ApplyJob) ?? { ...DEFAULT_JOB }
+  if (currentApplyJob.status === 'running') {
+    return NextResponse.json({ error: 'Application déjà en cours', job: currentApplyJob }, { status: 409 })
   }
 
   // Récupérer les règles
-  const settings = user.settings as Record<string, unknown> | null
   const customRules = typeof settings?.customRules === 'string' ? settings.customRules : null
 
   if (!customRules) {

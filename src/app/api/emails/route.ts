@@ -67,11 +67,16 @@ export async function GET(request: NextRequest) {
         byCategoryMap[row.category] = row._count.category
       }
 
-      // Précision estimée
+      // Précision estimée (basée sur les emails distincts corrigés)
+      const distinctCorrectedEmails = await db.emailFeedback.groupBy({
+        by: ['emailId'],
+        where: { userId },
+      })
+      const correctedCount = distinctCorrectedEmails.length
       const accuracy =
         totalProcessed > 0
-          ? Math.round(((totalProcessed - feedbackCount) / totalProcessed) * 100)
-          : 100
+          ? Math.round(((totalProcessed - correctedCount) / totalProcessed) * 100)
+          : 0
 
       // Temps gagné estimé : 2 min/email
       const timeSavedMinutes = totalProcessed * 2
@@ -94,13 +99,13 @@ export async function GET(request: NextRequest) {
   }
 
   // --- Liste ---
-  const limit = Math.min(parseInt(searchParams.get('limit') ?? '50', 10), 2000)
-  const offset = parseInt(searchParams.get('offset') ?? '0', 10)
+  const limit = Math.max(1, Math.min(parseInt(searchParams.get('limit') ?? '50', 10) || 50, 2000))
+  const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0', 10) || 0)
   const category = searchParams.get('category')
   const fromDate = searchParams.get('fromDate')
 
   try {
-    const where: any = { userId }
+    const where: { userId: string; category?: string; receivedAt?: { gte: Date } } = { userId }
 
     if (category && category !== 'all') {
       where.category = category

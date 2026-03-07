@@ -65,24 +65,24 @@ export function PricingSection() {
   const [annual, setAnnual] = useState(true)
 
   return (
-    <section id="pricing" className="py-24 border-t border-[#2a2a2a]">
+    <section id="pricing" className="py-24 border-t border-[var(--color-border)]">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-10">
-          <h2 className="text-3xl sm:text-4xl font-bold text-[#f5f5f5] mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-[var(--color-text-primary)] mb-4">
             Tarifs simples et transparents
           </h2>
-          <p className="text-[#a0a0a0] text-lg mb-8">
+          <p className="text-[var(--color-text-secondary)] text-lg mb-8">
             14 jours d&apos;essai gratuit sur tous les plans. Sans carte bancaire.
           </p>
 
           {/* Toggle mensuel / annuel */}
-          <div className="inline-flex items-center gap-3 p-1 rounded-xl bg-[#141414] border border-[#2a2a2a]">
+          <div className="inline-flex items-center gap-3 p-1 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)]">
             <button
               onClick={() => setAnnual(false)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 !annual
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-[#a0a0a0] hover:text-[#f5f5f5]'
+                  : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
               }`}
             >
               Mensuel
@@ -92,7 +92,7 @@ export function PricingSection() {
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 annual
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-[#a0a0a0] hover:text-[#f5f5f5]'
+                  : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
               }`}
             >
               Annuel
@@ -122,7 +122,7 @@ export function PricingSection() {
                 className={`relative rounded-2xl border p-6 ${
                   plan.highlighted
                     ? 'border-blue-600 bg-blue-950/20'
-                    : 'border-[#2a2a2a] bg-[#141414]'
+                    : 'border-[var(--color-border)] bg-[var(--color-surface)]'
                 }`}
               >
                 {plan.badge && (
@@ -134,36 +134,36 @@ export function PricingSection() {
                 )}
 
                 <div className="mb-6">
-                  <h3 className="text-lg font-bold text-[#f5f5f5] mb-1">{plan.name}</h3>
+                  <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-1">{plan.name}</h3>
                   {plan.id === 'business' ? (
                     <div className="mb-1">
-                      <span className="text-4xl font-bold text-[#f5f5f5]">Sur devis</span>
-                      <p className="text-sm text-[#6a6a6a] mt-1">{plan.emails}</p>
+                      <span className="text-4xl font-bold text-[var(--color-text-primary)]">Sur devis</span>
+                      <p className="text-sm text-[var(--color-text-tertiary)] mt-1">{plan.emails}</p>
                     </div>
                   ) : (
                     <>
                       <div className="flex items-end gap-1 mb-1">
-                        <span className="text-4xl font-bold text-[#f5f5f5]">{displayPrice}€</span>
-                        <span className="text-[#a0a0a0] mb-1">/mois</span>
+                        <span className="text-4xl font-bold text-[var(--color-text-primary)]">{displayPrice}€</span>
+                        <span className="text-[var(--color-text-secondary)] mb-1">/mois</span>
                       </div>
                       {annual && (
                         <div className="space-y-0.5 mb-1">
                           <p className="text-xs text-emerald-400 font-medium">
                             Facturé {annualTotal}€/an
                           </p>
-                          <p className="text-xs text-[#6a6a6a] line-through">
+                          <p className="text-xs text-[var(--color-text-tertiary)] line-through">
                             vs {plan.monthlyPrice * 12}€/an en mensuel
                           </p>
                         </div>
                       )}
-                      <p className="text-sm text-[#6a6a6a]">{plan.emails}</p>
+                      <p className="text-sm text-[var(--color-text-tertiary)]">{plan.emails}</p>
                     </>
                   )}
                 </div>
 
                 <ul className="space-y-3 mb-8">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2 text-sm text-[#a0a0a0]">
+                    <li key={feature} className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                       {feature}
                     </li>
@@ -176,7 +176,7 @@ export function PricingSection() {
                     className={`block w-full text-center py-3 px-6 rounded-xl font-semibold text-sm transition-all ${
                       plan.highlighted
                         ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25'
-                        : 'bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5]'
+                        : 'bg-[var(--color-surface-elevated)] hover:bg-white/[0.04] border border-[var(--color-border-hover)] text-[var(--color-text-primary)]'
                     }`}
                   >
                     {plan.cta}
@@ -187,7 +187,7 @@ export function PricingSection() {
                     className={`block w-full text-center py-3 px-6 rounded-xl font-semibold text-sm transition-all ${
                       plan.highlighted
                         ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25'
-                        : 'bg-[#1e1e1e] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#f5f5f5]'
+                        : 'bg-[var(--color-surface-elevated)] hover:bg-white/[0.04] border border-[var(--color-border-hover)] text-[var(--color-text-primary)]'
                     }`}
                   >
                     {plan.cta}
@@ -200,7 +200,7 @@ export function PricingSection() {
 
         {/* Garantie */}
         <div className="mt-10 text-center">
-          <p className="text-sm text-[#6a6a6a]">
+          <p className="text-sm text-[var(--color-text-tertiary)]">
             ✓ Annulation à tout moment &nbsp;·&nbsp; ✓ Sans engagement &nbsp;·&nbsp; ✓ Factures automatiques
           </p>
         </div>

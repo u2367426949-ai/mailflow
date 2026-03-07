@@ -136,14 +136,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Plan Pro requis' }, { status: 403 })
   }
 
-  // Vérifier qu'un tri n'est pas déjà en cours
-  const currentJob = await getSortJob(userId)
-  if (currentJob.status === 'running') {
-    return NextResponse.json({ error: 'Un tri est déjà en cours', job: currentJob }, { status: 409 })
+  // Vérifier qu'un tri n'est pas déjà en cours (lock atomique via Prisma)
+  const settings = user.settings as Record<string, unknown> | null
+  const currentSortJob = (settings?.sortJob as SortJob) ?? { ...DEFAULT_JOB }
+  if (currentSortJob.status === 'running') {
+    return NextResponse.json({ error: 'Un tri est déjà en cours', job: currentSortJob }, { status: 409 })
   }
 
   // Récupérer les customRules
-  const settings = user.settings as Record<string, unknown> | null
   const customRules = typeof settings?.customRules === 'string' ? settings.customRules : null
 
   // Initialiser le job
@@ -160,18 +160,21 @@ export async function POST(request: NextRequest) {
     lastError: null,
   })
 
-  // Lancer le tri en arrière-plan
-  // (la réponse est renvoyée immédiatement, le tri continue)
-  processSortJob(userId, customRules).catch((err) => {
+  // Traitement SYNCHRONE (Vercel tue les background jobs après la réponse)
+  try {
+    await processSortJob(userId, customRules)
+  } catch (err) {
     console.error('[SortAll] Fatal error:', err)
-    updateSortJob(userId, {
+    await updateSortJob(userId, {
       status: 'error',
       lastError: err instanceof Error ? err.message : 'Erreur inattendue',
       completedAt: new Date().toISOString(),
     })
-  })
+    return NextResponse.json({ error: 'Erreur durant le tri' }, { status: 500 })
+  }
 
-  return NextResponse.json({ success: true, message: 'Tri lancé' })
+  const finalJob = await getSortJob(userId)
+  return NextResponse.json({ success: true, job: finalJob })
 }
 
 // ----------------------------------------------------------

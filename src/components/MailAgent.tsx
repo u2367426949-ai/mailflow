@@ -205,7 +205,7 @@ export function MailAgent({ isPro, onUpgrade }: MailAgentProps) {
   // ── Fenêtre de chat ──────────────────────────────────────
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 ${chatWidth} flex flex-col rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden transition-all duration-300`}
+      className={`fixed bottom-6 right-6 z-50 ${chatWidth} max-w-[calc(100vw-2rem)] flex flex-col rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden transition-all duration-300`}
       style={{ background: '#0c0c10', boxShadow: '0 24px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(99,102,241,0.2)' }}
     >
       {/* ── Header ── */}

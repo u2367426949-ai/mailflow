@@ -427,7 +427,7 @@ export default function OnboardingPage() {
     const error = params.get('error')
     if (error) {
       setUrlError(error)
-      // Si on est sur une étape ultérieure, revenir à l'étape 1
+      setStep(0)
     }
 
     // Si on revient après OAuth avec succès, avancer à l'étape 2
@@ -445,7 +445,7 @@ export default function OnboardingPage() {
         .filter((c) => c.enabled)
         .map((c) => c.name)
 
-      await fetch('/api/me', {
+      const res = await fetch('/api/me', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -454,6 +454,8 @@ export default function OnboardingPage() {
           isOnboarded: true,
         }),
       })
+
+      if (!res.ok) throw new Error('Activation failed')
 
       // Rediriger vers le dashboard
       window.location.href = '/dashboard'
