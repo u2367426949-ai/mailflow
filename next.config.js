@@ -34,7 +34,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com",
               "font-src 'self'",
-              "connect-src 'self' https://api.openai.com https://api.stripe.com",
+              "connect-src 'self' https://api.openai.com https://api.stripe.com https://vercel.live",
               "frame-ancestors 'none'",
             ].join('; '),
           },
