@@ -21,6 +21,7 @@
     "@prisma/client": "^5.10.2",
     "@upstash/ratelimit": "^1.2.1",
     "@upstash/redis": "^1.28.4",
+    "@vercel/analytics": "^2.0.1",
     "autoprefixer": "^10.4.18",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",
